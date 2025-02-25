@@ -12,11 +12,15 @@ entry:
 %new_instance =				icmp ne ptr %story_handel, null
 							br i1 %new_instance, label %initilize, label %load_promise
 initilize:
+%init_message.addr =		getelementptr [7 x i8], ptr @init_message, i32 0, i32 0
+							call i32 @puts(ptr %init_message.addr)
 %new_instance_handel =		call ptr @__root()
-							br label %load_promise
+							ret ptr %new_instance_handel
 
 load_promise:
-%handel =					phi ptr [%new_instance_handel, %initilize], [%story_handel, %entry]
+; %handel =					phi ptr [%new_instance_handel, %initilize], [%story_handel, %entry]
+%handel =					phi ptr [%story_handel, %entry]
+							call i32 @puts(ptr @load_message)
 
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
 
@@ -63,7 +67,7 @@ resume:
 							;TODO: call flush()
 							ret ptr %resume_handel
 end:
-							ret ptr %handel
+							ret ptr null
 }
 
 ; Story
@@ -83,6 +87,9 @@ end:
 @story.gather_0.str_0 =			constant [8 x i8] c"The end\00"
 
 @error_message =				constant [7 x i8] c"Error!\00"
+@debug_message =				constant [7 x i8] c"Debug!\00"
+@init_message =				constant [7 x i8] c"init! \00"
+@load_message =				constant [7 x i8] c"load! \00"
 
 define ptr @__root() presplitcoroutine {
 entry:
@@ -104,8 +111,7 @@ suspend:
 							ret ptr %handel
 error:
 							;TODO: Error handeling
-%error_message.addr =		getelementptr [7 x i8], ptr @error_message, i32 0, i32 0
-							call i32 @puts(ptr %error_message.addr)
+							call i32 @puts(ptr @error_message)
 							br label %suspend
 
 destroy:
@@ -120,12 +126,10 @@ end:
 
 story:
 							;"Hello!"
-%story.str_0.addr =			getelementptr [0 x i8], ptr @story.str_0, i32 0, i32 0
-							call i32 @puts(i8* %story.str_0.addr)
+							call i32 @puts(ptr @story.str_0)
 
 							;""
-%story.str_1.addr =			getelementptr [0 x i8], ptr @story.str_1, i32 0, i32 0
-							call i32 @puts(i8* %story.str_1.addr)
+							call i32 @puts(ptr @story.str_1)
 
 							br label %story.choice_point_0
 
@@ -146,32 +150,28 @@ resume_story.choice_point_0:
 story.choice_0:					;"* Chose [A] the first"
 
 							;"Chose "
-%str_choice_0.0 =			getelementptr [0 x i8], ptr @story.choice_0.str_0, i32 0, i32 0
-							call i32 @puts(i8* %str_choice_0.0)
+							call i32 @puts(ptr @story.choice_0.str_0)
 
 							;" the first"
-%str_choice_0.1 =			getelementptr [0 x i8], ptr @story.choice_0.str_1, i32 0, i32 0
-							call i32 @puts(i8* %str_choice_0.1)
+							call i32 @puts(ptr @story.choice_0.str_1)
 
 							br label %story.gather_0
 
 story.choice_1:					;"* Or [B] the second"
 
 							;"Or "
-%str_choice_1.0 =			getelementptr [0 x i8], ptr @story.choice_1.str_0, i32 0, i32 0
-							call i32 @puts(i8* %str_choice_1.0)
+							call i32 @puts(ptr @story.choice_1.str_0)
 
 							;" the second"
 %str_choice_1.1 =			getelementptr [0 x i8], ptr @story.choice_1.str_1, i32 0, i32 0
-							call i32 @puts(i8* %str_choice_1.1)
+							call i32 @puts(ptr @story.choice_1.str_1)
 
 							br label %story.gather_0
 
 story.gather_0:					;"-"
 
 							;"The end"
-%story.gather_0.0 =				getelementptr [0 x i8], ptr @story.gather_0.str_0, i32 0, i32 0
-							call i32 @puts(i8* %story.gather_0.0)
+							call i32 @puts(ptr @story.gather_0.str_0)
 %suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token none, i1 true)
 							switch i8 %suspend_story.gather_0.0, label %suspend [i8 0, label %error i8 1, label %destroy]
 }
