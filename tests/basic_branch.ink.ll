@@ -25,7 +25,6 @@ initilize:
 load_promise:
 ; %handel =					phi ptr [%new_instance_handel, %initilize], [%story_handel, %entry]
 %handel =					phi ptr [%story_handel, %entry]
-							call i32 @puts(ptr @load_message)
 
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
 
@@ -68,8 +67,18 @@ call_up:
 							br label %resume
 resume:
 %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
+
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
+%continue_flag =			load i1, ptr %continue_flag.addr
+							br i1 %continue_flag, label %resume_call, label %resume_wait
+resume_call:
+							call i32 @puts(ptr @resume_message)
+
 							call void @llvm.coro.resume(ptr %resume_handel)
 							;TODO: call flush()
+							ret ptr %resume_handel
+resume_wait:
 							ret ptr %resume_handel
 end:
 							ret ptr null
@@ -143,8 +152,8 @@ success:
 
 @error_message =				constant [7 x i8] c"Error!\00"
 @debug_message =				constant [7 x i8] c"Debug!\00"
-@init_message =				constant [7 x i8] c"init! \00"
-@load_message =				constant [7 x i8] c"load! \00"
+@init_message =					constant [6 x i8] c"init!\00"
+@resume_message =				constant [8 x i8] c"resume!\00"
 
 define ptr @__root() presplitcoroutine {
 entry:
@@ -235,6 +244,8 @@ story.gather_0:					;"-"
 							;"The end"
 							call i32 @puts(ptr @story.gather_0.str_0)
 							store i1 false, ptr %continue_flag.addr
+							store i32 0, ptr %choice_count.addr
+
 %suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token none, i1 true)
 							switch i8 %suspend_story.gather_0.0, label %suspend [i8 0, label %error i8 1, label %destroy]
 }
