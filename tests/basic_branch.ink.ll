@@ -3,8 +3,12 @@ declare external i32 @puts(i8* nocapture) nounwind
 declare external void @free(ptr)
 declare external ptr @malloc(i32)
 
-%call_chain_type =			type { ptr, ptr } ; ptr up, ptr ret
+%call_chain_type =			type { ptr, ptr } ; {up: ptr, ret: ptr}
+%choice_type =				type { ptr, ptr } ; {text: ptr, tags: ptr}
 %promise_type =				type { i32, ptr, i1 } ; { choice_index: i32, call_chain: {ptr, ptr}, continue_flag: i1}
+
+%choice_list_type =		type {i32, ptr}
+@choice_list = private global %choice_list_type { i32 0, ptr null }
 
 ;Runtime Functions, takes handel or null
 define ptr @Step(ptr %story_handel) 
@@ -71,6 +75,12 @@ end:
 							ret ptr null
 }
 
+; Steps through the given Story handel returning all lines of content until
+; the story reaches a choice point/end of story
+; define ptr @ContinueMaximally(ptr %handel);
+
+; Returns false if story requires a choice selection or otherwise cannot continue
+; it's control flow
 define i1 @CanContinue(ptr %handel)
 {
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
@@ -78,6 +88,41 @@ define i1 @CanContinue(ptr %handel)
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 2
 %continue_flag =			load i1, ptr %continue_flag.addr
 							ret i1 %continue_flag
+}
+
+; Returns the number of choices availabe from a given story handel
+define i32 @ChoiceCount(ptr %handel)
+{
+%choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
+%choice_count =				load i32, ptr %choice_count.addr
+							ret i32 %choice_count
+}
+
+; Returns a choice object at a given index from the given story handel
+; define Choice @GetChoice(ptr %handel, i32);
+
+; Selects the choice at a given index for the given story handel
+; Note: Does not continue story
+define void @ChooseChoiceIndex(ptr %handel, i32 %choice_index)
+{
+%choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
+%choice_count =				load i32, ptr %choice_count.addr
+
+%index_less_than =			icmp uge i32 %choice_index, 0
+%index_positive = 			icmp ult i32 %choice_index, %choice_count
+%valid_index =				and i1 %index_less_than, %index_positive
+
+							br i1 %valid_index, label %success, label %error
+error:
+							call i32 @puts(ptr @error_message)
+							ret void
+success:
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%promise.choice_index.addr =getelementptr %promise_type, ptr %promise.addr, i32 0
+							store i32 %choice_index, ptr %promise.choice_index.addr
+%promise.continue_flag.addr=getelementptr %promise_type, ptr %promise.addr, i32 2
+							store i1 true, ptr %promise.continue_flag.addr
+							ret void
 }
 
 ; Story
@@ -114,6 +159,9 @@ frame_alloc:
 begin:
 %phi_alloc =				phi ptr [null, %entry], [%alloc, %frame_alloc]
 %handel =					call noalias ptr @llvm.coro.begin(token %id, ptr %phi_alloc)
+
+%choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
+
 							br label %story
 
 suspend:
@@ -147,6 +195,8 @@ story:
 
 story.choice_point_0:
 							store i1 false, ptr %continue_flag.addr
+							store i32 2, ptr %choice_count.addr
+
 							%save_story.choice_point_0 = call token @llvm.coro.save(ptr %handel)
 							%suspend_story.choice_point_0 = call i8 @llvm.coro.suspend(token %save_story.choice_point_0, i1 false)
 							switch i8 %suspend_story.choice_point_0, label %suspend 

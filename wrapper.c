@@ -7,13 +7,29 @@ int main()
 	printf("Initilizing:\n");
 	void* story = Step(NULL); 
 
-	printf("Continue?: %s\n", CanContinue(story) ? "True":"False");
+	printf("Status:\n\t%s\n\tContinue?: %s\n\tChoice count: %i\n", 
+			story == NULL ? "Ended" : "Unfinished", 
+			CanContinue(story) ? "True":"False"	,
+			ChoiceCount(story)
+	);
 
-	printf("Stepping:\n");
+	unsigned int choice = 1;
+	printf("Choosing choice %i...\n", choice);
+	ChooseChoiceIndex(story, choice);
+	printf("Status:\n\t%s\n\tContinue?: %s\n\tChoice count: %i\n", 
+			story == NULL ? "Ended" : "Unfinished", 
+			CanContinue(story) ? "True":"False"	,
+			ChoiceCount(story)
+	);
+
+	printf("Stepping..\n");
 	story = Step(story);
 	
-	printf("Status:\n\t%s", story == NULL ? "Ended" : "Unfinished");
-	printf("\tContinue?: %s\n", CanContinue(story) ? "True":"False");
+	printf("Status:\n\t%s\n\tContinue?: %s\n\tChoice count: %i\n", 
+			story == NULL ? "Ended" : "Unfinished", 
+			CanContinue(story) ? "True":"False"	,
+			ChoiceCount(story)
+	);
 
 	return 0;
 }

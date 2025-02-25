@@ -23,7 +23,7 @@ extern Choice GetChoice(Story, unsigned int);
 
 ///Selects the choice at a given index for the given story handel
 ///Note: Does not continue story
-extern Choice ChooseChoiceIndex(Story, unsigned int);
+extern void ChooseChoiceIndex(Story, unsigned int);
 
 /*TODO:
 extern char* SaveToJson(Story)
