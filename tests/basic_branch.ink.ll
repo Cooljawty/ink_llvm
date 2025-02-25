@@ -4,10 +4,11 @@ declare external void @free(ptr)
 declare external ptr @malloc(i32)
 
 %call_chain_type =			type { ptr, ptr } ; ptr up, ptr ret
-%promise_type =				type { i32, ptr } ; { choice_index: i32, call_chain: {ptr, ptr}}
+%promise_type =				type { i32, ptr, i1 } ; { choice_index: i32, call_chain: {ptr, ptr}, continue_flag: i1}
 
 ;Runtime Functions, takes handel or null
-define ptr @Step(ptr %story_handel) {
+define ptr @Step(ptr %story_handel) 
+{
 entry:
 %new_instance =				icmp eq ptr %story_handel, null
 							br i1 %new_instance, label %initilize, label %load_promise
@@ -70,6 +71,15 @@ end:
 							ret ptr null
 }
 
+define i1 @CanContinue(ptr %handel)
+{
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 2
+%continue_flag =			load i1, ptr %continue_flag.addr
+							ret i1 %continue_flag
+}
+
 ; Story
 
 ;Content Strings
@@ -125,6 +135,8 @@ end:
 							ret ptr null
 
 story:
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
+							store i1 true, ptr %continue_flag.addr
 							;"Hello!"
 							call i32 @puts(ptr @story.str_0)
 
@@ -134,6 +146,7 @@ story:
 							br label %story.choice_point_0
 
 story.choice_point_0:
+							store i1 false, ptr %continue_flag.addr
 							%save_story.choice_point_0 = call token @llvm.coro.save(ptr %handel)
 							%suspend_story.choice_point_0 = call i8 @llvm.coro.suspend(token %save_story.choice_point_0, i1 false)
 							switch i8 %suspend_story.choice_point_0, label %suspend 
@@ -145,6 +158,7 @@ resume_story.choice_point_0:
 							switch i32 %choice_0_index, label %error [i32 0, label %story.choice_0 i32 1, label %story.choice_1]
 
 story.choice_0:					;"* Chose [A] the first"
+							store i1 true, ptr %continue_flag.addr
 
 							;"Chose "
 							call i32 @puts(ptr @story.choice_0.str_0)
@@ -155,6 +169,7 @@ story.choice_0:					;"* Chose [A] the first"
 							br label %story.gather_0
 
 story.choice_1:					;"* Or [B] the second"
+							store i1 true, ptr %continue_flag.addr
 
 							;"Or "
 							call i32 @puts(ptr @story.choice_1.str_0)
@@ -169,6 +184,7 @@ story.gather_0:					;"-"
 
 							;"The end"
 							call i32 @puts(ptr @story.gather_0.str_0)
+							store i1 false, ptr %continue_flag.addr
 %suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token none, i1 true)
 							switch i8 %suspend_story.gather_0.0, label %suspend [i8 0, label %error i8 1, label %destroy]
 }

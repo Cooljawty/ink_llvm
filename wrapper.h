@@ -11,6 +11,10 @@ extern char* Continue(Story);
 ///the story reaches a choice point/end of story
 extern char* ContinueMaximally(Story);
 
+///Returns false if story requires a choice selection or otherwise cannot continue
+///it's control flow
+extern bool CanContinue(Story);
+
 ///Returns the number of choices availabe from a given story handel
 extern unsigned int ChoiceCount(Story);
 
