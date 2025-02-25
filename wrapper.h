@@ -1,3 +1,3 @@
 #pragma once
 
-extern int entry();
+extern void* Step(void*);

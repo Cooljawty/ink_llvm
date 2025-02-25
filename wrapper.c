@@ -3,7 +3,7 @@
 
 int main() 
 {
-	printf("output: %i\n", entry());
+	void* story = Step(NULL);
 
 	return 0;
 }
