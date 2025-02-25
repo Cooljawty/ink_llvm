@@ -3,7 +3,11 @@
 
 int main() 
 {
-	void* story = Step(NULL);
+	printf("Initilizing:\n");
+	void* story = Step(NULL); 
+
+	printf("Stepping:\n");
+	story = Step(story);
 
 	return 0;
 }

@@ -74,7 +74,7 @@ end:
 
 ;Content Strings
 @story.str_0 =					constant [7 x i8] c"Hello!\00"
-@story.str_1 =					constant [2 x i8] c"\0A\00"
+@story.str_1 =					constant [1 x i8] c"\00"
 
 @story.choice_0.str_0 =			constant [7 x i8] c"Chose \00"
 @story.choice_0.str_choice =	constant [2 x i8] c"A\00"
@@ -134,9 +134,6 @@ story:
 							br label %story.choice_point_0
 
 story.choice_point_0:
-							; Choice 0: { text:i8* = @str_story.choice_0 .. @str_story.choice_0.choice}
-							; Choice 1: { text:i8* = @str_story.choice_1 .. @str_story.choice_1.choice}
-
 							%save_story.choice_point_0 = call token @llvm.coro.save(ptr %handel)
 							%suspend_story.choice_point_0 = call i8 @llvm.coro.suspend(token %save_story.choice_point_0, i1 false)
 							switch i8 %suspend_story.choice_point_0, label %suspend 
