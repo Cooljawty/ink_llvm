@@ -9,7 +9,7 @@ declare external ptr @malloc(i32)
 ;Runtime Functions, takes handel or null
 define ptr @Step(ptr %story_handel) {
 entry:
-%new_instance =				icmp ne ptr %story_handel, null
+%new_instance =				icmp eq ptr %story_handel, null
 							br i1 %new_instance, label %initilize, label %load_promise
 initilize:
 %init_message.addr =		getelementptr [7 x i8], ptr @init_message, i32 0, i32 0
@@ -39,9 +39,9 @@ done:
 done2:
 %return_from_tunnel =		icmp ne ptr %ret_handel, null
 							br i1 %return_from_tunnel, label %call_ret, label %end
-divert:
-%has_return_handel =		icmp ne ptr %ret_handel, null
-							br i1 %has_return_handel, label %delete_chain, label %call_up
+							divert:
+							%has_return_handel =		icmp ne ptr %ret_handel, null
+br i1 %has_return_handel, label %delete_chain, label %call_up
 delete_chain:
 %parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
 ;Getting ret handel
