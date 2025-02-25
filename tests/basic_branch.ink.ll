@@ -1,11 +1,24 @@
 ; IO Functions
 declare external i32 @puts(i8* nocapture) nounwind
-declare external void @free(ptr)
-declare external ptr @malloc(i32)
+declare external i32 @fputs(i8* nocapture, ptr nocapture) nounwind
+@stdin  = extern_weak global %FILE_type
+@stderr = extern_weak global %FILE_type
+@stdout = extern_weak global  %FILE_type
 
-%call_chain_type =			type { ptr, ptr } ; {up: ptr, ret: ptr}
-%choice_type =				type { ptr, ptr } ; {text: ptr, tags: ptr}
-%promise_type =				type { i32, ptr, i1 } ; { choice_index: i32, call_chain: {ptr, ptr}, continue_flag: i1}
+; Memory allocation Functions
+declare external ptr @malloc(i32)
+declare external void @free(ptr)
+
+%FILE_type =						type opaque
+							; {up: ptr, ret: ptr}
+%call_chain_type =			type { ptr, ptr }
+							; {text: ptr, tags: ptr}
+%choice_type =				type { ptr, ptr }
+							;0: { choice_index: i32, 
+							;1:	call_chain: {ptr, ptr}, 
+							;2:	continue_flag: i1, 
+							;3:	out_stream: ptr }
+%promise_type =				type { i32, ptr, i1, ptr } 
 
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
@@ -33,6 +46,9 @@ load_promise:
 
 %ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
 %ret_handel =				load ptr, ptr %ret_handel.addr
+
+%outstream.addr =			getelementptr %promise_type, ptr %promise.addr, i32 3
+							store %FILE_type @stdout, ptr %out_stream.addr
 
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
 							br i1 %end_of_knot, label %done, label %continuing
@@ -170,6 +186,8 @@ begin:
 %handel =					call noalias ptr @llvm.coro.begin(token %id, ptr %phi_alloc)
 
 %choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
+%out_stream.addr =			getelementptr %promise_type, ptr %promise, i32 3
+%out_stream =				load ptr, ptr %out_stream.addr
 
 							br label %story
 
@@ -195,10 +213,10 @@ story:
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
 							store i1 true, ptr %continue_flag.addr
 							;"Hello!"
-							call i32 @puts(ptr @story.str_0)
+							call i32 @fputs(ptr @story.str_0, ptr %out_stream)
 
 							;""
-							call i32 @puts(ptr @story.str_1)
+							call i32 @fputs(ptr @story.str_1, ptr %out_stream)
 
 							br label %story.choice_point_0
 
@@ -220,10 +238,10 @@ story.choice_0:					;"* Chose [A] the first"
 							store i1 true, ptr %continue_flag.addr
 
 							;"Chose "
-							call i32 @puts(ptr @story.choice_0.str_0)
+							call i32 @fputs(ptr @story.choice_0.str_0, ptr %out_stream)
 
 							;" the first"
-							call i32 @puts(ptr @story.choice_0.str_1)
+							call i32 @fputs(ptr @story.choice_0.str_1, ptr %out_stream)
 
 							br label %story.gather_0
 
@@ -231,18 +249,18 @@ story.choice_1:					;"* Or [B] the second"
 							store i1 true, ptr %continue_flag.addr
 
 							;"Or "
-							call i32 @puts(ptr @story.choice_1.str_0)
+							call i32 @fputs(ptr @story.choice_1.str_0, ptr %out_stream)
 
 							;" the second"
 %str_choice_1.1 =			getelementptr [0 x i8], ptr @story.choice_1.str_1, i32 0, i32 0
-							call i32 @puts(ptr @story.choice_1.str_1)
+							call i32 @fputs(ptr @story.choice_1.str_1, ptr %out_stream)
 
 							br label %story.gather_0
 
 story.gather_0:					;"-"
 
 							;"The end"
-							call i32 @puts(ptr @story.gather_0.str_0)
+							call i32 @fputs(ptr @story.gather_0.str_0, ptr %out_stream)
 							store i1 false, ptr %continue_flag.addr
 							store i32 0, ptr %choice_count.addr
 
