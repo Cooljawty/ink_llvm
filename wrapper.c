@@ -30,14 +30,14 @@ int main()
 	//string_test();
 
 	printf("Initilizing:\n");
-	void* story = Step(NULL); 
+	void* story = ContinueMaximally(NULL); 
 	do{
 		print_status(story);
 
 		printf("Stepping..\n");
 		while(CanContinue(story))
 		{
-			story = Step(story);
+			story = ContinueMaximally(story);
 			print_status(story);
 		}
 
@@ -47,7 +47,7 @@ int main()
 		ChooseChoiceIndex(story, choice);
 		print_status(story);
 		
-		story = Step(story); 
+		story = ContinueMaximally(story); 
 	} while(ChoiceCount(story));
 
 	return 0;

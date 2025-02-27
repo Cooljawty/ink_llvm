@@ -10,6 +10,15 @@ declare external ptr @malloc(i32)
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
 
+; Strings
+%string_type =			type opaque
+declare extern_weak %string_type* @new_string()
+declare extern_weak i32 @write_string(%string_type* nocapture, i8* nocapture)
+declare extern_weak i32 @read_string(%string_type* nocapture, i8* nocapture)
+declare extern_weak void @flush_string(%string_type* nocapture)
+
+@out_stream = private global %string_type* null
+
 ;Runtime Functions, takes handel or null
 define ptr @Step(ptr %story_handel) 
 {
@@ -86,7 +95,85 @@ end:
 
 ; Steps through the given Story handel returning all lines of content until
 ; the story reaches a choice point/end of story
-; define ptr @ContinueMaximally(ptr %handel);
+define ptr @ContinueMaximally(ptr %handel)
+{
+entry:
+%output_string.addr =		call ptr @new_string()
+							store ptr %output_string.addr, ptr @out_stream
+
+%new_instance =				icmp eq ptr %handel, null
+							br i1 %new_instance, label %initilize, label %load_promise
+initilize:
+%init_message.addr =		getelementptr [7 x i8], ptr @init_message, i32 0, i32 0
+							call i32 @puts(ptr %init_message.addr)
+%new_instance_handel =		call ptr @__root()
+							call void @flush_string(ptr @out_stream)
+							call i32 @puts(ptr @newline_str)
+							ret ptr %new_instance_handel
+
+load_promise:
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+
+%up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
+%up_handel =				load ptr, ptr %up_handel.addr
+
+%ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
+%ret_handel =				load ptr, ptr %ret_handel.addr
+
+
+%end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
+							br i1 %end_of_knot, label %done, label %continuing
+done:
+							call void @llvm.coro.destroy(ptr %handel)
+%diverting =				icmp ne ptr %up_handel, null
+							br i1 %diverting, label %divert, label %done2
+done2:
+%return_from_tunnel =		icmp ne ptr %ret_handel, null
+							br i1 %return_from_tunnel, label %call_ret, label %end
+divert:
+%has_return_handel =		icmp ne ptr %ret_handel, null
+							br i1 %has_return_handel, label %delete_chain, label %call_up
+delete_chain:
+%parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
+;Getting ret handel
+%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
+%ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
+
+							call void @llvm.coro.destroy(ptr %parent_handel)
+;Looping
+%end_of_chain =				icmp eq ptr %ret_chain_handel, null
+							br i1 %end_of_chain, label %call_up, label %delete_chain
+
+continuing:
+%tunneling =				icmp ne ptr %up_handel, null
+							br i1 %tunneling, label %call_up, label %resume
+call_ret:
+							br label %resume
+call_up:
+							br label %resume
+resume:
+%resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
+
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
+%continue_flag =			load i1, ptr %continue_flag.addr
+							br i1 %continue_flag, label %resume_call, label %resume_wait
+resume_call:
+							call i32 @puts(ptr @resume_message)
+
+							call void @llvm.coro.resume(ptr %resume_handel)
+							call void @flush_string(ptr @out_stream)
+							call i32 @puts(ptr @newline_str)
+							ret ptr %resume_handel
+resume_wait:
+							ret ptr %resume_handel
+end:
+							ret ptr null
+error:
+							call i32 @puts(ptr @error_message)
+							ret ptr null
+}
 
 ; Returns false if story requires a choice selection or otherwise cannot continue
 ; it's control flow
@@ -150,6 +237,7 @@ success:
 
 @story.gather_0.str_0 =			constant [8 x i8] c"The end\00"
 
+@newline_str =					constant [2 x i8] c"\0A\00"
 @error_message =				constant [7 x i8] c"Error!\00"
 @debug_message =				constant [7 x i8] c"Debug!\00"
 @init_message =					constant [6 x i8] c"init!\00"
@@ -195,10 +283,10 @@ story:
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
 							store i1 true, ptr %continue_flag.addr
 							;"Hello!"
-							call i32 @puts(ptr @story.str_0)
+							call i32 @write_string(ptr @out_stream, ptr @story.str_0)
 
 							;""
-							call i32 @puts(ptr @story.str_1)
+							call i32 @write_string(ptr @out_stream, ptr @story.str_1)
 
 							br label %story.choice_point_0
 
@@ -220,10 +308,10 @@ story.choice_0:					;"* Chose [A] the first"
 							store i1 true, ptr %continue_flag.addr
 
 							;"Chose "
-							call i32 @puts(ptr @story.choice_0.str_0)
+							call i32 @write_string(ptr @out_stream, ptr @story.choice_0.str_0)
 
 							;" the first"
-							call i32 @puts(ptr @story.choice_0.str_1)
+							call i32 @write_string(ptr @out_stream, ptr @story.choice_0.str_1)
 
 							br label %story.gather_0
 
@@ -231,18 +319,18 @@ story.choice_1:					;"* Or [B] the second"
 							store i1 true, ptr %continue_flag.addr
 
 							;"Or "
-							call i32 @puts(ptr @story.choice_1.str_0)
+							call i32 @write_string(ptr @out_stream, ptr @story.choice_1.str_0)
 
 							;" the second"
 %str_choice_1.1 =			getelementptr [0 x i8], ptr @story.choice_1.str_1, i32 0, i32 0
-							call i32 @puts(ptr @story.choice_1.str_1)
+							call i32 @write_string(ptr @out_stream, ptr @story.choice_1.str_1)
 
 							br label %story.gather_0
 
 story.gather_0:					;"-"
 
 							;"The end"
-							call i32 @puts(ptr @story.gather_0.str_0)
+							call i32 @write_string(ptr @out_stream, ptr @story.gather_0.str_0)
 							store i1 false, ptr %continue_flag.addr
 							store i32 0, ptr %choice_count.addr
 
