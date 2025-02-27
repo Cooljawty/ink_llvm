@@ -13,8 +13,22 @@ void print_status(Story story)
 	);
 }
 
+void string_test()
+{
+	string* test_str = new_string();
+	write_string(test_str, "Hello!");
+	char* read_buf = malloc(1);
+	read_buf[0] = '\0';
+	read_string(test_str, read_buf);
+	printf("Test string: \'%s\'\n", read_buf);
+	free(test_str->buffer);
+	free(test_str);
+}
+
 int main() 
 {
+	//string_test();
+
 	printf("Initilizing:\n");
 	void* story = Step(NULL); 
 	do{
