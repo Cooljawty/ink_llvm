@@ -11,18 +11,18 @@ declare external void @free(ptr)
 
 %FILE_type =				type opaque
 
-%call_chain_type =			type { ptr, ptr }
-							; 0 up: ptr
-							; 1 ret: ptr
-
 %choice_type =				type { ptr, ptr }
 							; 0 text: ptr
 							; 1 tags: ptr
 
-%promise_type =				type { i32, ptr, i1} 
+%promise_type =				type { i32, %call_chain_type, i1} 
 							; 0 choice_index: i32 
 							; 1 call_chain: {ptr, ptr}
 							; 2 continue_flag: i1
+
+%call_chain_type =			type { ptr, ptr }
+							; 0 up: ptr
+							; 1 ret: ptr
 
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
@@ -92,6 +92,7 @@ continuing:
 call_ret:
 							br label %resume
 call_up:
+							call i32 @puts(ptr @debug_message)
 							br label %resume
 resume:
 %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]

@@ -38,10 +38,12 @@ int main()
 			story = ContinueMaximally(story);
 		}
 
-		unsigned int choice;
-		print_status(story);
-		printf("Chose choice: ");
-		scanf("%u", &choice);
+		unsigned int choice = 0;
+		printf("Choosing %d\n", choice);
+		//unsigned int choice;
+		//print_status(story);
+		//printf("Chose choice: ");
+		//scanf("%u", &choice);
 		ChooseChoiceIndex(story, choice);
 	} while(CanContinue(story) || ChoiceCount(story) > 0);
 
