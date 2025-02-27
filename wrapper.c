@@ -30,24 +30,19 @@ int main()
 	//string_test();
 
 	printf("Initilizing:\n");
-	void* story = ContinueMaximally(NULL); 
+	void* story = NewStory(); 
 	do{
-		print_status(story);
-
-		printf("Stepping..\n");
 		while(CanContinue(story))
 		{
+			printf("Stepping..\n");
 			story = ContinueMaximally(story);
-			print_status(story);
 		}
 
 		unsigned int choice;
+		print_status(story);
 		printf("Chose choice: ");
 		scanf("%u", &choice);
 		ChooseChoiceIndex(story, choice);
-		print_status(story);
-		
-		story = ContinueMaximally(story); 
 	} while(CanContinue(story) || ChoiceCount(story) > 0);
 
 	return 0;

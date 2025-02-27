@@ -112,6 +112,23 @@ end:
 							ret ptr null
 }
 
+; Initilizes a new instance of a ink story. Returing pointer to handel
+define ptr @NewStory()
+{
+entry:
+%output_string.addr =		call ptr @new_string()
+							store ptr %output_string.addr, ptr @out_stream
+
+
+							br label %initilize
+initilize:
+							call i32 @puts(ptr @init_message)
+%new_instance_handel =		call ptr @__root()
+							call void @flush_string(ptr @out_stream)
+							call i32 @puts(ptr @newline_str)
+							ret ptr %new_instance_handel
+}
+
 ; Steps through the given Story handel returning all lines of content until
 ; the story reaches a choice point/end of story
 define ptr @ContinueMaximally(ptr %handel)
@@ -121,14 +138,7 @@ entry:
 							store ptr %output_string.addr, ptr @out_stream
 
 %new_instance =				icmp eq ptr %handel, null
-							br i1 %new_instance, label %initilize, label %load_promise
-initilize:
-							call i32 @puts(ptr @init_message)
-%new_instance_handel =		call ptr @__root()
-							call void @flush_string(ptr @out_stream)
-							call i32 @puts(ptr @newline_str)
-							ret ptr %new_instance_handel
-
+							br i1 %new_instance, label %error, label %load_promise
 load_promise:
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
 
