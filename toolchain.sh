@@ -25,5 +25,6 @@ link_from_asm()
 case $1 in
 	install) install_llvm && compile_llvm ;;
 	build)	compile_from_ll $@ ;;
-	link)	compile_from_ll $@ | link_from_asm && ./$exe ;;
+	link)	compile_from_ll $@ | link_from_asm ;;
+	run)	compile_from_ll $@ | link_from_asm && ./$exe ;;
 esac
