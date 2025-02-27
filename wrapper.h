@@ -45,8 +45,7 @@ List stuff:
 string* new_string()
 {
 	string* new_string = malloc(sizeof(string));
-	new_string->buffer = malloc(1);
-	new_string->buffer[0] = '\0';
+	new_string->buffer = NULL;
 	new_string->size = 0;
 	return new_string;
 }
@@ -73,4 +72,11 @@ unsigned int read_string(string* self, char* buf)
 
 //Ensures all characters in the string's buffer is sent to the strings destination
 //ref: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.flush
-//void flush_string(string* self);
+void flush_string(string* self)
+{
+	//Debug: fush to stdout
+	printf("%s", self->buffer);
+
+	self->buffer = realloc(self->buffer, 0);
+	self->size = 0;
+}
