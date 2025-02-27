@@ -6,7 +6,7 @@
 
 void print_status(Story story)
 {
-	printf("Status:\n\t%s\n\tContinue?: %s\n\tChoice count: %i\n", 
+	printf("Status:%s\nContinue?: %s\nChoice count: %i\n", 
 			story == NULL ? "Ended" : "Unfinished", 
 			CanContinue(story) ? "True":"False"	,
 			ChoiceCount(story)
@@ -48,7 +48,7 @@ int main()
 		print_status(story);
 		
 		story = ContinueMaximally(story); 
-	} while(ChoiceCount(story));
+	} while(CanContinue(story) || ChoiceCount(story) > 0);
 
 	return 0;
 }

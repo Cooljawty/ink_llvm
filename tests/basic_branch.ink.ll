@@ -9,16 +9,20 @@ declare external i32 @fputs(i8* nocapture, ptr nocapture) nounwind
 declare external ptr @malloc(i32)
 declare external void @free(ptr)
 
-%FILE_type =						type opaque
-							; {up: ptr, ret: ptr}
+%FILE_type =				type opaque
+
 %call_chain_type =			type { ptr, ptr }
-							; {text: ptr, tags: ptr}
+							; 0 up: ptr
+							; 1 ret: ptr
+
 %choice_type =				type { ptr, ptr }
-							;0: { choice_index: i32, 
-							;1:	call_chain: {ptr, ptr}, 
-							;2:	continue_flag: i1, 
-							;3:	out_stream: ptr }
-%promise_type =				type { i32, ptr, i1, ptr } 
+							; 0 text: ptr
+							; 1 tags: ptr
+
+%promise_type =				type { i32, ptr, i1} 
+							; 0 choice_index: i32 
+							; 1 call_chain: {ptr, ptr}
+							; 2 continue_flag: i1
 
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
@@ -57,7 +61,6 @@ load_promise:
 %ret_handel =				load ptr, ptr %ret_handel.addr
 
 %outstream.addr =			getelementptr %promise_type, ptr %promise.addr, i32 3
-							store %FILE_type @stdout, ptr %out_stream.addr
 
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
 							br i1 %end_of_knot, label %done, label %continuing
@@ -68,9 +71,9 @@ done:
 done2:
 %return_from_tunnel =		icmp ne ptr %ret_handel, null
 							br i1 %return_from_tunnel, label %call_ret, label %end
-							divert:
-							%has_return_handel =		icmp ne ptr %ret_handel, null
-br i1 %has_return_handel, label %delete_chain, label %call_up
+divert:
+%has_return_handel =		icmp ne ptr %ret_handel, null
+							br i1 %has_return_handel, label %delete_chain, label %call_up
 delete_chain:
 %parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
 ;Getting ret handel
@@ -120,8 +123,7 @@ entry:
 %new_instance =				icmp eq ptr %handel, null
 							br i1 %new_instance, label %initilize, label %load_promise
 initilize:
-%init_message.addr =		getelementptr [7 x i8], ptr @init_message, i32 0, i32 0
-							call i32 @puts(ptr %init_message.addr)
+							call i32 @puts(ptr @init_message)
 %new_instance_handel =		call ptr @__root()
 							call void @flush_string(ptr @out_stream)
 							call i32 @puts(ptr @newline_str)
@@ -171,13 +173,12 @@ call_up:
 resume:
 %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
 
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %resume_handel, i32 4, i1 false) ; TODO: Get target platform alignment
 %continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
 							call i32 @puts(ptr @resume_message)
-
 							call void @llvm.coro.resume(ptr %resume_handel)
 							call void @flush_string(ptr @out_stream)
 							call i32 @puts(ptr @newline_str)
@@ -274,10 +275,21 @@ begin:
 %handel =					call noalias ptr @llvm.coro.begin(token %id, ptr %phi_alloc)
 
 %choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
-%out_stream.addr =			getelementptr %promise_type, ptr %promise, i32 3
-%out_stream =				load ptr, ptr %out_stream.addr
 
-							br label %story
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
+							store i1 true, ptr %continue_flag.addr
+
+%up_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 0
+							store ptr null, ptr %up_handel.addr
+
+%ret_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 1
+							store ptr null, ptr %ret_handel.addr
+
+%save_begin =				call token @llvm.coro.save(ptr %handel)
+%suspend_begin =			call i8 @llvm.coro.suspend(token %save_begin, i1 false)
+							switch i8 %suspend_begin,  label %suspend 
+												[i8 0, label %story
+												 i8 1, label %destroy]
 
 suspend:
 %unused =					call i1 @llvm.coro.end(ptr null, i1 false, token none)
@@ -298,7 +310,6 @@ end:
 							ret ptr null
 
 story:
-%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
 							store i1 true, ptr %continue_flag.addr
 							;"Hello!"
 							call i32 @write_string(ptr @out_stream, ptr @story.str_0)
@@ -320,6 +331,7 @@ story.choice_point_0:
 resume_story.choice_point_0:
 %choice_0_index.addr =		getelementptr %promise_type, ptr %promise, i32 0
 %choice_0_index =			load i32, ptr %choice_0_index.addr
+							store i32 0, ptr %choice_count.addr
 							switch i32 %choice_0_index, label %error [i32 0, label %story.choice_0 i32 1, label %story.choice_1]
 
 story.choice_0:					;"* Chose [A] the first"
@@ -347,11 +359,18 @@ story.choice_1:					;"* Or [B] the second"
 
 story.gather_0:					;"-"
 
+; %save_tmp =				call token @llvm.coro.save(ptr %handel)
+; %suspend_tmp =			call i8 @llvm.coro.suspend(token %save_tmp, i1 false)
+; 							switch i8 %suspend_tmp,  label %suspend 
+; 												[i8 0, label %story.gather_0.0
+; 												 i8 1, label %destroy]
+; story.gather_0.0:			
 							;"The end"
 							call i32 @write_string(ptr @out_stream, ptr @story.gather_0.str_0)
 							store i1 false, ptr %continue_flag.addr
 							store i32 0, ptr %choice_count.addr
 
-%suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token none, i1 true)
+%save_story.gather_0.0 = call token @llvm.coro.save(ptr %handel)
+%suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token %save_story.gather_0.0, i1 true)
 							switch i8 %suspend_story.gather_0.0, label %suspend [i8 0, label %error i8 1, label %destroy]
 }
