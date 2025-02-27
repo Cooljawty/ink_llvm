@@ -1,15 +1,20 @@
 #pragma once
+typedef struct {char* buffer; unsigned int size; } string;
+
 typedef void* Story;
 typedef struct{ char* text; char* tags; } Choice;
 
 extern Story Step(Story);
 
+///Returns a handel to a new instance of this story
+extern Story NewStory();
+
 ///Steps through the given Story handel returning a line of content
-extern char* Continue(Story);
+extern string* Continue(Story);
 
 ///Steps through the given Story handel returning all lines of content until
 ///the story reaches a choice point/end of story
-extern char* ContinueMaximally(Story);
+extern string* ContinueMaximally(Story);
 
 ///Returns false if story requires a choice selection or otherwise cannot continue
 ///it's control flow
@@ -35,3 +40,43 @@ extern void ObserveVariable(void*, func*)
 List stuff:
 ...
 */
+
+///C wrapper methods
+string* new_string()
+{
+	string* new_string = malloc(sizeof(string));
+	new_string->buffer = NULL;
+	new_string->size = 0;
+	return new_string;
+}
+//Write buf to string
+//ref: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.write
+unsigned int write_string(string* self, char* buf)
+{
+	unsigned int new_size = self->size + strlen(buf);
+	self->buffer = realloc(self->buffer, new_size);
+	self->size = new_size;
+	strncat(self->buffer, buf, self->size);
+
+	return self->size;
+}
+//Writes chars from the string to buf
+//ref:https://doc.rust-lang.org/std/io/trait.Read.html#tymethod.read
+unsigned int read_string(string* self, char* buf)
+{
+	buf = realloc(buf, self->size);
+	strcpy(buf, self->buffer);
+
+	return self->size;
+}
+
+//Ensures all characters in the string's buffer is sent to the strings destination
+//ref: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.flush
+void flush_string(string* self)
+{
+	//Debug: fush to stdout
+	printf("%s", self->buffer);
+
+	self->buffer = realloc(self->buffer, 0);
+	self->size = 0;
+}
