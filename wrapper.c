@@ -17,12 +17,17 @@ void string_test()
 {
 	string* test_str = new_string();
 	write_string(test_str, "Hello!");
+
 	char* read_buf = malloc(1);
 	read_buf[0] = '\0';
 	read_string(test_str, read_buf);
 	printf("Test string: \'%s\'\n", read_buf);
-	free(test_str->buffer);
-	free(test_str);
+
+	printf("Flushing string:\n");
+	flush_string(test_str);
+	printf("\n");
+
+	free_string(test_str);
 }
 
 int main() 
@@ -30,7 +35,7 @@ int main()
 	//string_test();
 
 	printf("Initilizing:\n");
-	void* story = NewStory(); 
+	Story story = NewStory(); 
 	do{
 		while(CanContinue(story))
 		{
@@ -39,11 +44,9 @@ int main()
 		}
 
 		unsigned int choice = 0;
-		printf("Choosing %d\n", choice);
-		//unsigned int choice;
-		//print_status(story);
-		//printf("Chose choice: ");
-		//scanf("%u", &choice);
+		print_status(story);
+		printf("Chose choice: ");
+		scanf("%u", &choice);
 		ChooseChoiceIndex(story, choice);
 	} while(CanContinue(story) || ChoiceCount(story) > 0);
 
