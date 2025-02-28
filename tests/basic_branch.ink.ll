@@ -1,9 +1,5 @@
 ; IO Functions
 declare external i32 @puts(i8* nocapture) nounwind
-declare external i32 @fputs(i8* nocapture, ptr nocapture) nounwind
-@stdin  = extern_weak global %FILE_type
-@stderr = extern_weak global %FILE_type
-@stdout = extern_weak global  %FILE_type
 
 ; Memory allocation Functions
 declare external ptr @malloc(i32)
@@ -30,6 +26,7 @@ declare external void @free(ptr)
 ; Strings
 %string_type =			type opaque
 declare extern_weak %string_type* @new_string()
+declare extern_weak void @free_string(%string_type* nocapture)
 declare extern_weak i32 @write_string(%string_type* nocapture, i8* nocapture)
 declare extern_weak i32 @read_string(%string_type* nocapture, i8* nocapture)
 declare extern_weak void @flush_string(%string_type* nocapture)
@@ -117,16 +114,9 @@ end:
 define ptr @NewStory()
 {
 entry:
-%output_string.addr =		call ptr @new_string()
-							store ptr %output_string.addr, ptr @out_stream
-
-
-							br label %initilize
-initilize:
 							call i32 @puts(ptr @init_message)
+
 %new_instance_handel =		call ptr @__root()
-							call void @flush_string(ptr @out_stream)
-							call i32 @puts(ptr @newline_str)
 							ret ptr %new_instance_handel
 }
 
@@ -135,9 +125,6 @@ initilize:
 define ptr @ContinueMaximally(ptr %handel)
 {
 entry:
-%output_string.addr =		call ptr @new_string()
-							store ptr %output_string.addr, ptr @out_stream
-
 %new_instance =				icmp eq ptr %handel, null
 							br i1 %new_instance, label %error, label %load_promise
 load_promise:
@@ -148,7 +135,6 @@ load_promise:
 
 %ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
 %ret_handel =				load ptr, ptr %ret_handel.addr
-
 
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
 							br i1 %end_of_knot, label %done, label %continuing
@@ -164,6 +150,7 @@ divert:
 							br i1 %has_return_handel, label %delete_chain, label %call_up
 delete_chain:
 %parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
+
 ;Getting ret handel
 %ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 4, i1 false) ; TODO: Get target platform alignment
 %ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
@@ -178,11 +165,14 @@ continuing:
 %tunneling =				icmp ne ptr %up_handel, null
 							br i1 %tunneling, label %call_up, label %resume
 call_ret:
+							call i32 @puts(ptr @debug_ret_message)
 							br label %resume
 call_up:
+							call i32 @puts(ptr @debug_up_message)
 							br label %resume
 resume:
-%resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
+; %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
+%resume_handel =			phi ptr [%handel, %continuing], [%handel, %call_up], [%handel, %call_ret]
 
 %resume_promise.addr =		call ptr @llvm.coro.promise(ptr %resume_handel, i32 4, i1 false) ; TODO: Get target platform alignment
 %continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
@@ -190,12 +180,13 @@ resume:
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
 							call i32 @puts(ptr @resume_message)
+%output_string =			call ptr @new_string()
+							store ptr %output_string, ptr @out_stream
+
 							call void @llvm.coro.resume(ptr %resume_handel)
-							call void @flush_string(ptr @out_stream)
-							call i32 @puts(ptr @newline_str)
-							ret ptr %resume_handel
+							ret ptr @out_stream
 resume_wait:
-							ret ptr %resume_handel
+							ret ptr null
 end:
 							ret ptr null
 error:
@@ -268,10 +259,13 @@ success:
 @newline_str =					constant [2 x i8] c"\0A\00"
 @error_message =				constant [7 x i8] c"Error!\00"
 @debug_message =				constant [7 x i8] c"Debug!\00"
+@debug_up_message =				constant [11 x i8] c"calling up\00"
+@debug_ret_message =			constant [12 x i8] c"calling ret\00"
 @init_message =					constant [6 x i8] c"init!\00"
 @resume_message =				constant [8 x i8] c"resume!\00"
 
-define ptr @__root() presplitcoroutine {
+define ptr @__root() presplitcoroutine 
+{
 entry:
 %promise =					alloca %promise_type
 %id =						call token @llvm.coro.id(i32 4, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
@@ -290,11 +284,12 @@ begin:
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
 							store i1 true, ptr %continue_flag.addr
 
-%up_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 0
-							store ptr null, ptr %up_handel.addr
-
-%ret_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 1
-							store ptr null, ptr %ret_handel.addr
+; TODO: Fix up_handel non-null issue						
+; %up_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 0
+; 							store ptr null, ptr %up_handel.addr
+; 
+; %ret_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 1
+; 							store ptr null, ptr %ret_handel.addr
 
 %save_begin =				call token @llvm.coro.save(ptr %handel)
 %suspend_begin =			call i8 @llvm.coro.suspend(token %save_begin, i1 false)
@@ -370,18 +365,11 @@ story.choice_1:					;"* Or [B] the second"
 
 story.gather_0:					;"-"
 
-; %save_tmp =				call token @llvm.coro.save(ptr %handel)
-; %suspend_tmp =			call i8 @llvm.coro.suspend(token %save_tmp, i1 false)
-; 							switch i8 %suspend_tmp,  label %suspend 
-; 												[i8 0, label %story.gather_0.0
-; 												 i8 1, label %destroy]
-; story.gather_0.0:			
 							;"The end"
 							call i32 @write_string(ptr @out_stream, ptr @story.gather_0.str_0)
 							store i1 false, ptr %continue_flag.addr
-							store i32 0, ptr %choice_count.addr
 
-%save_story.gather_0.0 = call token @llvm.coro.save(ptr %handel)
-%suspend_story.gather_0.0 = call i8 @llvm.coro.suspend(token %save_story.gather_0.0, i1 true)
-							switch i8 %suspend_story.gather_0.0, label %suspend [i8 0, label %error i8 1, label %destroy]
+%save_story.gather_0 =		call token @llvm.coro.save(ptr %handel)
+%suspend_story.gather_0 =	call i8 @llvm.coro.suspend(token %save_story.gather_0, i1 true)
+							switch i8 %suspend_story.gather_0, label %suspend [i8 0, label %error i8 1, label %destroy]
 }

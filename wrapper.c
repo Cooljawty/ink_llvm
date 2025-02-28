@@ -40,7 +40,9 @@ int main()
 		while(CanContinue(story))
 		{
 			printf("Stepping..\n");
-			story = ContinueMaximally(story);
+			string* str = ContinueMaximally(story);
+			flush_string(str);
+			printf("\n");
 		}
 
 		if(ChoiceCount(story) > 0)

@@ -46,7 +46,7 @@ string* new_string()
 {
 	string* new_string = malloc(sizeof(string));
 	new_string->buffer = NULL;
-	new_string->size = 8;
+	new_string->size = 0;
 	return new_string;
 }
 
@@ -64,9 +64,10 @@ void free_string(string* self)
 unsigned int write_string(string* self, char* buf)
 {
 	unsigned int new_size = (self->size > 0 ? self->size : 1) + strlen(buf);
-	self->buffer = realloc(self->buffer, new_size);
 	self->size = new_size;
-	strncat(self->buffer, buf, self->size);
+
+	self->buffer = realloc(self->buffer, self->size);
+	strcat(self->buffer, buf);
 
 	return self->size;
 }
