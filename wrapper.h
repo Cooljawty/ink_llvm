@@ -1,5 +1,5 @@
 #pragma once
-typedef struct {char* buffer; unsigned int size; } string;
+typedef struct {char* buffer; unsigned int size;} string;
 
 typedef void* Story;
 typedef struct{ char* text; char* tags; } Choice;
@@ -45,7 +45,7 @@ List stuff:
 string* new_string()
 {
 	string* new_string = malloc(sizeof(string));
-	new_string->buffer = NULL;
+	new_string->buffer = malloc(0);
 	new_string->size = 0;
 	return new_string;
 }

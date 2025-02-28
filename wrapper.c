@@ -30,9 +30,12 @@ void string_test()
 	free_string(test_str);
 }
 
+string* tmp(){ string* tmp = new_string(); return tmp; }
 int main() 
 {
 	//string_test();
+
+	string* prev_string = NULL;
 
 	printf("Initilizing:\n");
 	Story story = NewStory(); 
@@ -41,8 +44,10 @@ int main()
 		{
 			printf("Stepping..\n");
 			string* str = ContinueMaximally(story);
-			flush_string(str);
-			printf("\n");
+			printf("\'%s\'\n", str->buffer);
+
+			if(prev_string != NULL) free_string(prev_string);
+			prev_string = str;
 		}
 
 		if(ChoiceCount(story) > 0)
@@ -55,6 +60,8 @@ int main()
 		}
 
 	} while(CanContinue(story) || ChoiceCount(story) > 0);
+
+	if(prev_string != NULL) free_string(prev_string);
 
 	return 0;
 }

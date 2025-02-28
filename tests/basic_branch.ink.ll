@@ -24,14 +24,14 @@ declare external void @free(ptr)
 @choice_list = private global %choice_list_type { i32 0, ptr null }
 
 ; Strings
-%string_type =			type opaque
-declare extern_weak %string_type* @new_string()
-declare extern_weak void @free_string(%string_type* nocapture)
-declare extern_weak i32 @write_string(%string_type* nocapture, i8* nocapture)
-declare extern_weak i32 @read_string(%string_type* nocapture, i8* nocapture)
-declare extern_weak void @flush_string(%string_type* nocapture)
+%string_type = type {ptr, i32}
+declare extern_weak ptr @new_string()
+declare extern_weak void @free_string(ptr nocapture)
+declare extern_weak i32 @write_string(ptr nocapture, i8* nocapture)
+declare extern_weak i32 @read_string(ptr nocapture, i8* nocapture)
+declare extern_weak void @flush_string(ptr nocapture)
 
-@out_stream = private global %string_type* null
+@out_stream = private global %string_type {ptr null, i32 0}
 
 ;Runtime Functions, takes handel or null
 define ptr @Step(ptr %story_handel) 
@@ -180,11 +180,12 @@ resume:
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
 							call i32 @puts(ptr @resume_message)
-%output_string =			call ptr @new_string()
-							store ptr %output_string, ptr @out_stream
+%output_string.addr =		call ptr @new_string()
+%output_string =			load %string_type, ptr %output_string.addr
+							store %string_type %output_string, ptr @out_stream
 
 							call void @llvm.coro.resume(ptr %resume_handel)
-							ret ptr @out_stream
+							ret ptr %output_string.addr
 resume_wait:
 							ret ptr null
 end:
