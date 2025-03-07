@@ -1,0 +1,76 @@
+# Ink Grammer
+## Knots & Stiches
+root:				includes* variable_definition* Knot_body? Knot*
+knot:				'=='[=]* identifer param_list? [=]* Knot_body
+knot_body:			stich*
+
+stitch:				'=' identifer param_list? '=' Stitch_body
+stitch_body:		weave* 
+
+function:			'=='[=]* function identifier param_list? Function_body
+function_body:		content*
+param_list:			( '(' 'ref'? '->'? identifer [',' 'ref'? '->'? identifer]* ')' )
+
+
+## Weaves
+weave:				content* (choice weave?)* gather? 
+
+choice:						('*' | '+')+ label choice_condition* content ( '[' (text | )* ']' )?
+choice_fallback:			('*' | '+')+ (branch? | '->' content*)? //NOTE: nothing after * or + is legal but gives warning
+conditional_choice_block:	'{' expression ':' ( choice branch )* ('-' 'else' ':' ( choice branch )* '}'
+switch_chioce_block:		'{' expression ':' ('-' expression ':' ( choice branch )* ( choice branch )* '}'
+choice_condition: '{' expression '}'
+
+//NOTE: can be seperated by space or tab, or not seperated at all
+gather:				('-')+ label?
+
+label:				'(' identifier ')'
+
+## Branching
+branch:				divert | tunnel | tunnel_return | thread
+divert:				'->' ((identifier | variable) | 'DONE' | 'END')
+tunnel:				divert+ (divert | '->')
+tunnel_return:		'->->' (identifier | variable | 'DONE' | 'END')?
+thread:				'<-' ((identifier | variable) | 'DONE' | 'END')
+
+ 
+## Variables & Lists
+Variable_definition:		'VAR' identifier '=' ( ink_value | constant)
+Temp_Variable_definition:	'temp' identifier '=' (ink_value | variable | constant)
+Constant_definition:		'CONST' identifier '=' (Integer | Decimal | sring | constant)
+
+List_definition:	'LIST' identifier '='  ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' )  (',' ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' ) )*
+
+
+## Content
+content:			text | eval | (alternative | alternative_block) | (conditional | conditional_block | switch_block)
+text:				String | alternativve | conditional 
+eval:				'{' string | expression'}'
+
+alternative:		'{' alternate_type_sym ((text | eval)+ | ((divert | tunnel_return) | tunnel | thread) | alternative)? ( '|' ((text | eval)+ | ((divert | tunnel_return) | tunnel | thread) | alternative)? )* '}'
+alternative_block:	'{' alternate_type ':' ( '-' ((text | eval)+ | (logic | return)+ | ((divert | tunnel_return) | tunnel | thread) | (alternative | alternative_block)) ) '}'
+alternate_type:		'stopping' | 'once' | 'cycle' | 'shuffle' |'shuffle once' | 'shuffle stopping' 
+alternate_type_sym:	'!' | '&' | '~'
+
+conditional:		'{' expression ':' (text | alternative | divert)? ( '|' (text | alternative)? )* '}'
+conditional_block:	'{' ('-' expression ':' (text | logic ))+ ('-' 'else' ':' (text | logic | Choice) )? '}'
+switch_block:		'{' expression ':' ('-' expression ':' (text | logic | Choice))* ('-' 'else' ':' (text | logic | Choice) )? '}'
+
+
+## Logic
+logic:				'~' (expression | function_call | variable_assignment | temp_variable_definition)
+return:				'~' 'return' (expression | function_call )
+
+variable_assignment: identifier '=' (ink_value | variable | constant | literal)
+expression:			literal | variable | constant | ink_value | '(' expression ')' | (expression bin_op expression)
+
+//Note: Integer and Decimal allow leading and following zeros!
+literal:			Integer | Decimal | '"' string '"' | ('true' | 'false')
+math_bin_op:		'+' | '-' | '*' | '/' | ('%' | 'mod)
+string_bin_op:		'==' | '!=' | '?'
+logic_bin_op:		('and' | '&&') | ('or' | '||')
+bin_op:				math_bin_op | string_bin_op
+
+math_unary_op:		'-'
+logic_unary_op:		('not' | '!')
+unary_op:			math_unary_op | logic_unary_op
