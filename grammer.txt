@@ -1,4 +1,6 @@
 # Ink Grammer
+//Assume all white spaces are ignored, except for newlines
+//TODO: Define when newlines are ignored
 ## Knots & Stiches
 root:				includes* variable_definition* Knot_body? Knot*
 knot:				'=='[=]* identifer param_list? [=]* Knot_body
@@ -18,7 +20,6 @@ weave:				content* (choice weave?)* gather?
 choice:						('*' | '+')+ label choice_condition* content ( '[' (text | )* ']' )?
 choice_fallback:			('*' | '+')+ (branch? | '->' content*)? //NOTE: nothing after * or + is legal but gives warning
 conditional_choice_block:	'{' expression ':' ( choice branch )* ('-' 'else' ':' ( choice branch )* '}'
-switch_chioce_block:		'{' expression ':' ('-' expression ':' ( choice branch )* ( choice branch )* '}'
 choice_condition: '{' expression '}'
 
 //NOTE: can be seperated by space or tab, or not seperated at all
@@ -54,7 +55,7 @@ alternate_type_sym:	'!' | '&' | '~'
 
 conditional:		'{' expression ':' (text | alternative | divert)? ( '|' (text | alternative)? )* '}'
 conditional_block:	'{' ('-' expression ':' (text | logic ))+ ('-' 'else' ':' (text | logic | Choice) )? '}'
-switch_block:		'{' expression ':' ('-' expression ':' (text | logic | Choice))* ('-' 'else' ':' (text | logic | Choice) )? '}'
+switch_block:		'{' expression ':' ('-' expression ':' (text | logic ))* ('-' 'else' ':' (text | logic ) )? '}'
 
 
 ## Logic
@@ -62,10 +63,10 @@ logic:				'~' (expression | function_call | variable_assignment | temp_variable_
 return:				'~' 'return' (expression | function_call )
 
 variable_assignment: identifier '=' (ink_value | variable | constant | literal)
-expression:			literal | variable | constant | ink_value | '(' expression ')' | (expression bin_op expression)
+expression:			literal | variable | constant | '(' expression ')' | (unary_op expression) | (expression bin_op expression)
 
 //Note: Integer and Decimal allow leading and following zeros!
-literal:			Integer | Decimal | '"' string '"' | ('true' | 'false')
+literal:			Integer | Decimal | '"' string '"' | ('true' | 'false') | divert | list_value
 math_bin_op:		'+' | '-' | '*' | '/' | ('%' | 'mod)
 string_bin_op:		'==' | '!=' | '?'
 logic_bin_op:		('and' | '&&') | ('or' | '||')

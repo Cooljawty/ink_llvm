@@ -1,4 +1,20 @@
-fn main() {
+use std::fs::File;
+use std::env;
+use std::io::BufReader;
+
+use crate::parser;
+
+fn main() -> std::io::Result<()>{
+   
+    let src_path = env::args().nth(1)?;
+    let src_file = File::open(src_path)?;
+    let mut src_reader = BufReader::new(src_file);
+
+    let _ast = parse(src_reader);
+}
+
+fn llvm_test()
+    {
     unsafe {
         use llvm_sys::{ core::*, analysis::*, target::*};
         let context = LLVMContextCreate();
