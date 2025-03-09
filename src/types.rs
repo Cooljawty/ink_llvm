@@ -9,6 +9,7 @@ pub enum Value {
     ListValue,
 }
 
+#[allow(dead_code)]
 pub struct Choice<'ast> {
     index: usize,
 
@@ -21,6 +22,7 @@ pub struct Choice<'ast> {
     destination: Value,
 }
 
+#[allow(dead_code)]
 struct Weave<'ast> {
     content: Vec<Content>,
     choices: Vec<Choice<'ast>>,

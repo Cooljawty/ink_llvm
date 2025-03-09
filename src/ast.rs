@@ -1,6 +1,6 @@
 use crate::types::Value;
 
-#[derive(Clone,)]
+#[derive(Clone, PartialEq, Debug,)]
 pub enum Subprogram {
     Knot,
     Stitch,

@@ -1,20 +1,23 @@
 use std::fs::File;
 use std::env;
-use std::io::BufReader;
+use std::io::Read;
 
 use llvm_tutorial::parser::parse;
 
 fn main() -> std::io::Result<()>{
    
     let src_path = env::args().nth(1).ok_or(std::io::ErrorKind::NotFound)?;
-    let src_file = File::open(src_path)?;
-    let mut src_reader = BufReader::new(src_file);
+    let mut src_file = File::open(src_path)?;
+    let mut src = String::new();
+    src_file.read_to_string(&mut src)?;
 
-    let _ast = parse(src_reader);
+    let ast = parse(src.as_str());
+    println!("{:?}", ast);
 
     Ok(())
 }
 
+#[allow(dead_code)]
 fn llvm_test()
     {
     unsafe {
@@ -42,7 +45,7 @@ fn llvm_test()
         LLVMDumpModule(module);
 
         let mut err_msg = std::mem::zeroed();
-        let res = LLVMVerifyModule(module, LLVMVerifierFailureAction::LLVMPrintMessageAction, &mut err_msg);
+        let _res = LLVMVerifyModule(module, LLVMVerifierFailureAction::LLVMPrintMessageAction, &mut err_msg);
         LLVMDisposeMessage(err_msg);
         //assert!(res != 0, "Invalid Module!");
 
