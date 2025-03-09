@@ -2,31 +2,40 @@ use nom::IResult;
 use nom::{
     Parser,
     multi::{many0},
-    bytes::{take_till},
+    bytes::{take_until,},
+    combinator::{value,},
 };
 
 use crate::{ast};
 
-trait Input: std::io::BufRead + nom::Input + Sized {}
 
-pub fn parse<I: Input>(input: I) -> IResult<I, (ast::Subprogram, Vec<ast::Subprogram>)>
+pub fn parse<I>(input: I) -> IResult<I, (ast::Subprogram, Vec<ast::Subprogram>)>
+where
+    I: nom::Input + for<'parser> nom::FindSubstring<&'parser str>, 
 {
-    let (remaining, (root, knots)) = (knot, many0(knot)).parse(input)?;
-    let program = (root, knots);
+    let (remaining, (root_knot, knots)) = (knot_body, many0(knot)).parse(input)?;
+    let program = (root_knot, knots);
+
     Ok((remaining, program))
 }
 
 
-fn knot<I: Input>(input: I) -> IResult<I, ast::Subprogram>
-{
-    let (remaining, knot_src) = take_till(|i| knot_signature(i).is_ok()).parse(input)?;
-    let (remaining, (signature, body)) = (knot_signature, knot_body).parse(knot_src)?;
-
-    Ok((remaining, ast::Subprogram::Knot))
+fn knot<I>(input: I) -> IResult<I, ast::Subprogram>
+where
+    I: nom::Input + for<'parser> nom::FindSubstring<&'parser str>, 
+{   
+    value(ast::Subprogram::Knot, (knot_signature, knot_body)).parse(input)
 }
 
-fn knot_signature<I: Input>(input: I) -> IResult<I, ast::Subprogram> { todo!() }
-fn knot_body<I: Input>(input: I) -> IResult<I, ast::Subprogram> { todo!() }
+fn knot_body<I>(input: I) -> IResult<I, ast::Subprogram> 
+where
+    I: nom::Input + for<'parser> nom::FindSubstring<&'parser str>, 
+{ value(ast::Subprogram::Knot, take_until("==")).parse(input) }
+
+fn knot_signature<I>(input: I) -> IResult<I, ast::Subprogram> 
+where
+    I: nom::Input, 
+{ todo!() }
 
 #[cfg(test)]
 mod tests {

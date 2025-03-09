@@ -2,15 +2,17 @@ use std::fs::File;
 use std::env;
 use std::io::BufReader;
 
-use crate::parser;
+use llvm_tutorial::parser::parse;
 
 fn main() -> std::io::Result<()>{
    
-    let src_path = env::args().nth(1)?;
+    let src_path = env::args().nth(1).ok_or(std::io::ErrorKind::NotFound)?;
     let src_file = File::open(src_path)?;
     let mut src_reader = BufReader::new(src_file);
 
     let _ast = parse(src_reader);
+
+    Ok(())
 }
 
 fn llvm_test()

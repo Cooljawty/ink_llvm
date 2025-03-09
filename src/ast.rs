@@ -1,19 +1,20 @@
 use crate::types::Value;
 
-pub(crate) enum Subprogram {
+#[derive(Clone,)]
+pub enum Subprogram {
     Knot,
     Stitch,
     Function,
 }
 
-pub(crate) enum Content {
+pub enum Content {
     Text,
     Alternative,
     Conditional,
     Logic,
 }
 
-pub(crate) enum Expression<'ast>  {
+pub enum Expression<'ast>  {
     Literal(Value),
     Variable,
     Constant(Value),
@@ -21,7 +22,7 @@ pub(crate) enum Expression<'ast>  {
     BinOp(Operation, &'ast Expression<'ast>, &'ast Expression<'ast>),
 }
 
-pub(crate) enum Operation {
+pub enum Operation {
     ///Logical:
     And,
     Or,
