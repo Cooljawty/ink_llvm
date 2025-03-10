@@ -13,7 +13,7 @@ use nom::{
             line_ending, not_line_ending,
         },
     },
-    combinator::{value, opt, eof, not, peek,},
+    combinator::{value, opt, eof, not, peek, recognize,success,},
     branch::{alt,},
 };
 
@@ -40,7 +40,11 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 {   
     println!("Parsing knot");
-    value(ast::Subprogram::Knot, (knot_signature, knot_body)).parse(input)
+    let (rem, _) = knot_signature.parse(input)?;
+    let (rem, _body) = knot_body.parse(rem)?;
+    println!("End of knot");
+    Ok((rem, ast::Subprogram::Knot))
+    //value(ast::Subprogram::Knot, (knot_signature, knot_body)).parse(input)
 }
 
 fn knot_body<I>(input: I) -> IResult<I, ast::Subprogram> 
@@ -50,7 +54,7 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
     println!("Parsing body");
-    value(ast::Subprogram::Knot, many_till((anychar, anychar), peek(alt((tag("=="), eof))))).parse(input) 
+    value(ast::Subprogram::Knot, many_till(recognize((anychar, anychar)), peek(alt((tag("=="), eof))))).parse(input) 
 }
 
 fn knot_signature<I>(input: I) -> IResult<I, ast::Subprogram> 
@@ -60,10 +64,13 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
     println!("Parsing signature");
-    value(ast::Subprogram::Knot, (tag("=="), opt(is_a("=")), space0, identifier, space0, opt(is_a("=")), line_ending)).parse(input)
+    let (rem, _) = (tag("=="), opt(is_a("=")), space0).parse(input)?;
+    let (rem, name) = identifier.parse(rem)?;
+    println!("\tname: {}", name);
+    value(ast::Subprogram::Knot, (space0, opt(is_a("=")), line_ending)).parse(rem)
 }
 
-fn identifier<I>(input: I) -> IResult<I, ast::Subprogram> 
+fn identifier<I>(input: I) -> IResult<I, String> 
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -71,7 +78,12 @@ where
 {
     //TODO: More permissive identifier
     println!("Parsing identifier");
-    value(ast::Subprogram::Knot, (alpha1, alphanumeric0)).parse(input)
+    let (rem, (first, rest)) = (alpha1, alphanumeric0).parse(input)?;
+
+    use nom::AsChar;
+    let name = first.iter_elements().chain(rest.iter_elements()).map(|c| c.as_char()).collect();
+
+    Ok((rem, name))
 }
 
 #[cfg(test)]
