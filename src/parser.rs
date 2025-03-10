@@ -25,7 +25,6 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    println!("Parsing root");
     let (remaining, (root_knot, knots, _)) = (knot_body, many0(knot), alt((line_ending, eof))).parse(input)?;
     let program = (
         (
@@ -49,7 +48,6 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {   
-    println!("Parsing knot");
     let (rem, (name, parameters)) = knot_signature.parse(input)?;
     let (rem, body) = knot_body.parse(rem)?;
 
@@ -62,14 +60,12 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
-    println!("Parsing body");
     let (rem, body) = match take_until("==").parse(input.clone()) {
         Ok((rem, body)) => {
             peek(recognize(knot_signature)).parse(rem.clone())?;
             (rem, body)
         },
         nom::IResult::Err(nom::Err::Incomplete(_)) => {
-            println!("\teof!");
             input.take_split(input.input_len()-1)
         },
         err => err?
@@ -84,7 +80,6 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
-    println!("Parsing signature");
     let (rem, _) = (space0, tag("=="), opt(is_a("=")), space0).parse(input)?;
     let (rem, name) = identifier.parse(rem)?;
     let (rem, _) = (space0, opt(is_a("=")), line_ending).parse(rem)?;
@@ -98,7 +93,6 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
 {
     //TODO: More permissive identifier
-    println!("Parsing identifier");
     let (rem, (first, rest)) = (alpha1, alphanumeric0).parse(input)?;
 
     use nom::AsChar;
