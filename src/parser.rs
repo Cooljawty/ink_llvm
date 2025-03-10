@@ -19,31 +19,41 @@ use nom::{
 
 use crate::{ast};
 
-pub fn parse<I>(input: I) -> IResult<I, ((ast::Subprogram, I), Vec<(ast::Subprogram, I)>)>
+pub fn parse<I>(input: I) -> IResult<I, ((ast::Callable, I), Vec<(ast::Callable, I)>)>
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {
     println!("Parsing root");
     let (remaining, (root_knot, knots, _)) = (knot_body, many0(knot), alt((line_ending, eof))).parse(input)?;
-    let program = ((ast::Subprogram::Knot, root_knot), knots);
+    let program = (
+        (
+            ast::Callable{ 
+                ty: ast::Subprogram::Knot, 
+                name: "__root".into(),
+                parameters: vec![],
+            },
+            root_knot
+        ), 
+        knots
+    );
 
     Ok((remaining, program))
 }
 
 
-fn knot<I>(input: I) -> IResult<I, (ast::Subprogram, I)>
+fn knot<I>(input: I) -> IResult<I, (ast::Callable, I)>
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     println!("Parsing knot");
-    let (rem, _signature) = knot_signature.parse(input)?;
+    let (rem, (name, parameters)) = knot_signature.parse(input)?;
     let (rem, body) = knot_body.parse(rem)?;
 
-    Ok((rem, (ast::Subprogram::Knot, body)))
+    Ok((rem, (ast::Callable{name: name.into(), parameters, ty: ast::Subprogram::Knot}, body)))
 }
 
 fn knot_body<I, T>(input: I) -> IResult<I, I> 
@@ -68,7 +78,7 @@ where
     Ok((rem, body))
 }
 
-fn knot_signature<I>(input: I) -> IResult<I, ast::Subprogram> 
+fn knot_signature<I>(input: I) -> IResult<I, (ast::Identifier, Vec<ast::Parameter>)> 
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -77,13 +87,11 @@ where
     println!("Parsing signature");
     let (rem, _) = (space0, tag("=="), opt(is_a("=")), space0).parse(input)?;
     let (rem, name) = identifier.parse(rem)?;
-    println!("\tname: {}", name);
     let (rem, _) = (space0, opt(is_a("=")), line_ending).parse(rem)?;
-    println!("End signature");
-    Ok((rem, ast::Subprogram::Knot))
+    Ok((rem, (name, vec![]/*TODO: Parse parameters*/)))
 }
 
-fn identifier<I>(input: I) -> IResult<I, String> 
+fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -115,11 +123,11 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                (ast::Subprogram::Knot, root_body), 
+                (ast::Callable{ty: ast::Subprogram::Knot, name: root_name, ..}, root_body), 
             [
-                (ast::Subprogram::Knot, _),
-                (ast::Subprogram::Knot, _),
-            ])  if root_body.trim() != "" => {},
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
+            ])  if root_body.trim() != "" && (k1_name == "K1" && k2_name == "K2")=> {},
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
@@ -137,11 +145,11 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                (ast::Subprogram::Knot, root_body), 
+                (ast::Callable{ty: ast::Subprogram::Knot, name: root_name, ..}, root_body), 
             [
-                (ast::Subprogram::Knot, _),
-                (ast::Subprogram::Knot, _),
-            ])  if root_body.trim() == "" => {},
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
+            ])  if root_body.trim() == "" && (k1_name == "K1" && k2_name == "K2")=> {},
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 

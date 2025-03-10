@@ -1,10 +1,27 @@
 use crate::types::Value;
 
+
+pub type Identifier = String;
+
+#[derive(Debug,)]
+pub struct Callable {
+    pub(crate) ty: Subprogram,
+    pub(crate) name: Identifier,
+    pub(crate) parameters: Vec<Parameter>
+}
+
 #[derive(Clone, PartialEq, Debug,)]
 pub enum Subprogram {
     Knot,
     Stitch,
     Function,
+}
+
+#[derive(Debug,)]
+pub struct Parameter {
+    name: Identifier,
+    refrence: bool,
+    ty: Value,
 }
 
 pub enum Content {
