@@ -11,8 +11,11 @@ fn main() -> std::io::Result<()>{
     let mut src = String::new();
     src_file.read_to_string(&mut src)?;
 
-    let ast = parse(src.as_str());
-    println!("{:?}", ast);
+    if let Ok((remaining, ast)) = parse(src.as_str()){
+    println!("AST:\n{:?}\n", ast);
+    println!("Unparsed:\n{:?}\n", remaining);
+    }
+
 
     Ok(())
 }

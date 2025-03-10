@@ -26,7 +26,7 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 {
     println!("Parsing root");
-    let (remaining, (root_knot, knots)) = (knot_body, many0(knot)).parse(input)?;
+    let (remaining, (root_knot, knots, _)) = (knot_body, many0(knot), alt((line_ending, eof))).parse(input)?;
     let program = (root_knot, knots);
 
     Ok((remaining, program))
@@ -43,10 +43,7 @@ where
     let (rem, _signature) = knot_signature.parse(input)?;
     let (rem, _body) = knot_body.parse(rem)?;
 
-    //let (rem, _body) = knot_body.parse(rem)?;
-    println!("End of knot");
     Ok((rem, ast::Subprogram::Knot))
-    //value(ast::Subprogram::Knot, (knot_signature, knot_body)).parse(input)
 }
 
 fn knot_body<I, T>(input: I) -> IResult<I, ast::Subprogram> 
@@ -56,14 +53,10 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
     println!("Parsing body");
-    //value(ast::Subprogram::Knot, many_till( recognize(      (anychar, anychar)  ),  peek(alt(    (tag("=="), eof)                ))  )).parse(input) 
-
-    //println!("\n----\n{}\n<<<<\n", chunk.iter().map(nom::Input::iter_elements).flatten().map(nom::AsChar::as_char).collect::<String>());
-    //println!("End body");
-    //Ok((rem, ast::Subprogram::Knot))
-    let (rem, body) = match take_until("==").parse(input.clone()) {
+    let (rem, _body) = match take_until("==").parse(input.clone()) {
         Ok((rem, body)) => {
-            peek(recognize(knot_signature)).parse(rem)?
+            peek(recognize(knot_signature)).parse(rem.clone())?;
+            (rem, body)
         },
         nom::IResult::Err(nom::Err::Incomplete(_)) => {
             println!("\teof!");
@@ -71,8 +64,6 @@ where
         },
         err => err?
     };
-    println!("\n>>>>\n{}\n>>>>\n", body.iter_elements().map(nom::AsChar::as_char).collect::<String>());
-    println!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(nom::AsChar::as_char).collect::<String>());
     
     Ok((rem, ast::Subprogram::Knot))
 }
@@ -90,7 +81,6 @@ where
     let (rem, _) = (space0, opt(is_a("=")), line_ending).parse(rem)?;
     println!("End signature");
     Ok((rem, ast::Subprogram::Knot))
-    //value(ast::Subprogram::Knot, (space0, opt(is_a("=")), line_ending)).parse(rem)
 }
 
 fn identifier<I>(input: I) -> IResult<I, String> 
@@ -112,13 +102,17 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::Input;
 
     #[test]
     fn parse_knots_with_root() -> Result<(), Box<dyn std::error::Error>>    {
         let (unparsed, parsed) = parse(include_str!("../tests/knots_with_root.ink"))?;
 
+        match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
+            Ok(_) => {},
+            _ => assert!(false, "Incomplete parse. Remaining text: {}:'{}'", unparsed.input_len(), unparsed),
+        }
         assert_eq!(parsed, (ast::Subprogram::Knot, vec![ast::Subprogram::Knot;2]), "Invalid parse.\nRemaining: \n{}\n---", unparsed);
-        assert!(unparsed.is_empty(), "Incomplete parse. Remaining text: {}", unparsed);
         Ok(())
     }
 }
