@@ -115,11 +115,11 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                (ast::Subprogram::Knot, _), 
+                (ast::Subprogram::Knot, root_body), 
             [
                 (ast::Subprogram::Knot, _),
                 (ast::Subprogram::Knot, _),
-            ]) => {},
+            ])  if root_body.trim() != "" => {},
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn parse_knots_without_root() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots)) = parse(include_str!("../tests/knots_with_root.ink"))?;
+        let (unparsed, (root, knots)) = parse(include_str!("../tests/knots_without_root.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},
@@ -137,11 +137,11 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                (ast::Subprogram::Knot, ""), 
+                (ast::Subprogram::Knot, root_body), 
             [
                 (ast::Subprogram::Knot, _),
                 (ast::Subprogram::Knot, _),
-            ]) => {},
+            ])  if root_body.trim() == "" => {},
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
