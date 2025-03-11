@@ -25,9 +25,12 @@ use nom::{
 
 use crate::{ast};
 
+pub trait Input<'parser>: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str> {}
+impl <'parser, I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str> + nom::FindToken<<I as nom::Input>::Item>> Input<'parser> for I {}
+
 pub fn parse<I>(input: I) -> IResult<I, ((ast::Callable, I), Vec<(ast::Callable, I)>)>
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -50,7 +53,7 @@ where
 
 fn knot<I>(input: I) -> IResult<I, (ast::Callable, I)>
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {   
@@ -59,11 +62,11 @@ where
     Ok((rem, (signature, body)))
 }
 
-fn knot_body<I, T>(input: I) -> IResult<I, I> 
+fn knot_body<I>(input: I) -> IResult<I, I> 
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str> + nom::FindSubstring<T>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     let (rem, body) = match take_until("==").parse(input.clone()) {
         Ok((rem, body)) => {
@@ -81,9 +84,9 @@ where
 
 fn knot_signature<I>(input: I) -> IResult<I, ast::Callable> 
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 { 
 
 
@@ -103,9 +106,9 @@ where
 
 fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {
     let (rem, name) = verify(
         //TODO: Add parsers for non-ASCII characters
@@ -127,9 +130,9 @@ where
 
 fn parameter_list<I>(input: I) -> IResult<I, Vec<ast::Parameter>> 
 where
-	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    I: for<'parser> Input<'parser>,
     <I as nom::Input>::Item: nom::AsChar,
-    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {
     let (rem, (_, param_list, _)) = (
         (tag("("), space0),
