@@ -1,19 +1,25 @@
 use nom::IResult;
 
+/* Debug printer
+use nom::AsChar;
+println!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
+println!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
+*/
+
 #[allow(unused_imports)]
 use nom::{
     Parser,
-    multi::{many0, many_till, fold_many0},
+    multi::{many0, many_till, fold_many0,separated_list0,},
     bytes::{tag, is_a, take_until,take_till},
     character::{
-        anychar,
+        anychar,one_of,
         complete::{
             space0,
             alpha1, alphanumeric0,
             line_ending, not_line_ending,
         },
     },
-    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,},
+    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,},
     branch::{alt,},
 };
 
@@ -80,10 +86,15 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item> 
 { 
-    let (rem, _) = (space0, tag("=="), opt(is_a("=")), space0).parse(input)?;
-    let (rem, name) = identifier.parse(rem)?;
-    let (rem, _) = (space0, opt(is_a("=")), line_ending).parse(rem)?;
-    Ok((rem, (name, vec![]/*TODO: Parse parameters*/)))
+
+
+    let (rem, (_, (name, _, parameters), _)) =
+    (
+        (space0, tag("=="), opt(is_a("=")), space0),
+        (identifier, space0, opt(parameter_list)),
+        (space0, opt(is_a("=")), line_ending)
+    ).parse(input)?;
+    Ok((rem, (name, parameters.unwrap_or(vec![]))))
 }
 
 fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
@@ -93,12 +104,43 @@ where
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
 {
     //TODO: More permissive identifier
-    let (rem, (first, rest)) = (alpha1, alphanumeric0).parse(input)?;
+    let (rem, name) = recognize((alpha1, alphanumeric0, opt(tag("_")), alphanumeric0, opt(tag("_")), alphanumeric0)).parse(input)?;
 
     use nom::AsChar;
-    let name = first.iter_elements().chain(rest.iter_elements()).map(|c| c.as_char()).collect();
+    let name = name.iter_elements().map(|c| c.as_char()).collect();
 
     Ok((rem, name))
+}
+
+fn parameter_list<I>(input: I) -> IResult<I, Vec<ast::Parameter>> 
+where
+	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
+{
+    //let (rem, (_, param_list, _)) = (
+    let (rem, (_, param_list, _)) = (
+        (tag("("), space0),
+            separated_list0(
+                (space0, tag(","), space0),
+                (
+                    opt(tag("ref")), space0, opt(tag("->")), 
+                    space0, 
+                    identifier 
+                ),
+            ),
+        (space0, tag(")")),
+    ).parse(input)?;
+
+    let param_list = param_list.iter().map(|(is_ref, _, is_divert, _, name)|{ 
+        ast::Parameter{ 
+            name: name.to_string(), 
+            refrence: is_ref.is_some(), 
+            is_divert: is_divert.is_some() 
+        } 
+    }).collect();
+
+    Ok((rem, param_list))
 }
 
 #[cfg(test)]
@@ -121,7 +163,7 @@ mod tests {
             [
                 (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
                 (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
-            ])  if root_body.trim() != "" && (k1_name == "K1" && k2_name == "K2")=> {},
+            ])  if root_body.trim() != "" && (root_name == "__root" && k1_name == "K1" && k2_name == "K2")=> {},
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
@@ -143,7 +185,32 @@ mod tests {
             [
                 (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
                 (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
-            ])  if root_body.trim() == "" && (k1_name == "K1" && k2_name == "K2")=> {},
+            ])  if root_body.trim() == "" && (root_name == "__root" && k1_name == "K1" && k2_name == "K2")=> {},
+            _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
+        };
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_knot_with_parameters() -> Result<(), Box<dyn std::error::Error>>    {
+        let (unparsed, knots) = nom::multi::many1(knot).parse(include_str!("../tests/knots_with_parameters.ink"))?;
+        match knots.as_slice() {
+            [
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k1_parameters, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k2_parameters, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k3_parameters, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k4_parameters, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k5_parameters, ..}, _),
+                (ast::Callable{ty: ast::Subprogram::Knot, parameters: k6_parameters, ..}, _),
+            ] => {
+                assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
+                assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
+                assert!(matches!(k3_parameters.as_slice(), [ast::Parameter{..}, ast::Parameter{..}, ast::Parameter{..}]), "Expected 3 arguments");
+                assert!(matches!(k4_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: false, ..}]), "Expected 1 argument by refrence");
+                assert!(matches!(k5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
+                assert!(matches!(k6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
+            },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 

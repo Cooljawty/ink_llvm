@@ -3,6 +3,7 @@ use crate::types::Value;
 
 pub type Identifier = String;
 
+#[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Callable {
     pub(crate) ty: Subprogram,
@@ -17,11 +18,12 @@ pub enum Subprogram {
     Function,
 }
 
-#[derive(Debug,)]
+#[allow(dead_code)]
+#[derive(Clone, Debug,)]
 pub struct Parameter {
-    name: Identifier,
-    refrence: bool,
-    ty: Value,
+    pub(crate) name: Identifier,
+    pub(crate) refrence: bool,
+    pub(crate) is_divert: bool,
 }
 
 pub enum Content {

@@ -11,8 +11,8 @@ stitch_body:		weave*
 
 function:			'=='[=]* function identifier param_list? Function_body
 function_body:		content*
-param_list:			( '(' 'ref'? '->'? identifer [',' 'ref'? '->'? identifer]* ')' )
-
+param_list:			( '(' (param [',' param ]*)? ')' )
+param:				'ref'? '->'? identifer
 
 ## Weaves
 weave:				content* (choice weave?)* gather? 
