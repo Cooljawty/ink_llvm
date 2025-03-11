@@ -110,11 +110,14 @@ where
     let (rem, name) = verify(
         //TODO: Add parsers for non-ASCII characters
         recognize(many0(alt((alphanumeric1, tag("_"))))),
-        |n: &I| n.iter_elements()
-            .nth(0)
-            .expect("Parsed identifier as empty string?!")
-            .is_alpha(),
-        ).parse(input)?;
+        |n: &I| {let c = 
+            n.iter_elements()
+             .nth(0)
+             .expect("Parsed identifier as empty string?!")
+             .as_char();
+
+            c.is_alpha() || c == '_'
+        }).parse(input)?;
 
     use nom::AsChar;
     let name = name.iter_elements().map(|c| c.as_char()).collect();
@@ -170,9 +173,18 @@ mod tests {
             (
                 (ast::Callable{ty: ast::Subprogram::Knot, name: root_name, ..}, root_body), 
             [
-                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
-                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
-            ])  if root_body.trim() != "" && (root_name == "__root" && k1_name == "K1" && k2_name == "K2")=> {},
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, k1_body),
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, k2_body),
+            ]) => {
+                assert_eq!(root_name, "__root");
+                assert_ne!(root_body.trim(), "", "Root body parse error");
+
+                assert_eq!(k1_name, "K1");
+                assert_ne!(k1_body.trim(), "K1 body parse error");
+
+                assert_eq!(k2_name, "K2");
+                assert_ne!(k2_body.trim(), "K2 body parse error");
+            },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
@@ -192,9 +204,18 @@ mod tests {
             (
                 (ast::Callable{ty: ast::Subprogram::Knot, name: root_name, ..}, root_body), 
             [
-                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, _),
-                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, _),
-            ])  if root_body.trim() == "" && (root_name == "__root" && k1_name == "K1" && k2_name == "K2")=> {},
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k1_name, ..}, k1_body),
+                (ast::Callable{ty: ast::Subprogram::Knot, name: k2_name, ..}, k2_body),
+            ]) => {
+                assert_eq!(root_name, "__root");
+                assert_eq!(root_body.trim(), "", "Root body parse error");
+
+                assert_eq!(k1_name, "K1");
+                assert_ne!(k1_body.trim(), "K1 body parse error");
+
+                assert_eq!(k2_name, "K2");
+                assert_ne!(k2_body.trim(), "K2 body parse error");
+            },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
 
@@ -222,6 +243,19 @@ mod tests {
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_identifier() -> Result<(), Box<dyn std::error::Error>> {
+        let (res, id) = identifier("a;")?; assert_eq!((";", "a"), (res, id.as_str()));
+        let (res, id) = identifier("var;")?; assert_eq!((";", "var"), (res, id.as_str()));
+        let (res, id) = identifier("a_var;")?; assert_eq!((";", "a_var"), (res, id.as_str()));
+        let (res, id) = identifier("_var;")?; assert_eq!((";", "_var"), (res, id.as_str()));
+        let (res, id) = identifier("a_var_w_1_number;")?; assert_eq!((";", "a_var_w_1_number"), (res, id.as_str()));
+
+        if let Ok((res, id)) = identifier("1var_w_num;") { panic!("Invalid parse! Should of returned error.\nresult: ('{}','{}')", res, id); }
 
         Ok(())
     }
