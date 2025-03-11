@@ -15,11 +15,11 @@ use nom::{
         anychar,one_of,
         complete::{
             space0,
-            alpha1, alphanumeric0,
+            alpha1, alphanumeric1,
             line_ending, not_line_ending,
         },
     },
-    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,},
+    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,verify},
     branch::{alt,},
 };
 
@@ -107,8 +107,14 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
 {
-    //TODO: More permissive identifier
-    let (rem, name) = recognize((alpha1, alphanumeric0, opt(tag("_")), alphanumeric0, opt(tag("_")), alphanumeric0)).parse(input)?;
+    let (rem, name) = verify(
+        //TODO: Add parsers for non-ASCII characters
+        recognize(many0(alt((alphanumeric1, tag("_"))))),
+        |n: &I| n.iter_elements()
+            .nth(0)
+            .expect("Parsed identifier as empty string?!")
+            .is_alpha(),
+        ).parse(input)?;
 
     use nom::AsChar;
     let name = name.iter_elements().map(|c| c.as_char()).collect();
@@ -122,7 +128,6 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>, 
 {
-    //let (rem, (_, param_list, _)) = (
     let (rem, (_, param_list, _)) = (
         (tag("("), space0),
             separated_list0(
@@ -136,7 +141,7 @@ where
         (space0, tag(")")),
     ).parse(input)?;
 
-    let param_list = param_list.iter().map(|(is_ref, _, is_divert, _, name)|{ 
+    let param_list = param_list.iter().map(|(is_ref, _, is_divert, _, name)| { 
         ast::Parameter{ 
             name: name.to_string(), 
             refrence: is_ref.is_some(), 
