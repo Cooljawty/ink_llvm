@@ -54,10 +54,9 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'parser> &'parser str: nom::FindToken<<I as nom::Input>::Item>,
 {   
-    let (rem, (name, parameters)) = knot_signature.parse(input)?;
-    let (rem, body) = knot_body.parse(rem)?;
+    let (rem, (signature, body)) = (knot_signature, knot_body).parse(input)?;
 
-    Ok((rem, (ast::Callable{name: name.into(), parameters, ty: ast::Subprogram::Knot}, body)))
+    Ok((rem, (signature, body)))
 }
 
 fn knot_body<I, T>(input: I) -> IResult<I, I> 
@@ -80,7 +79,7 @@ where
     Ok((rem, body))
 }
 
-fn knot_signature<I>(input: I) -> IResult<I, (ast::Identifier, Vec<ast::Parameter>)> 
+fn knot_signature<I>(input: I) -> IResult<I, ast::Callable> 
 where
 	for<'parser> I: nom::Input + nom::Offset + nom::Compare<&'parser str> + nom::FindSubstring<&'parser str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -94,7 +93,12 @@ where
         (identifier, space0, opt(parameter_list)),
         (space0, opt(is_a("=")), line_ending)
     ).parse(input)?;
-    Ok((rem, (name, parameters.unwrap_or(vec![]))))
+    
+    Ok((rem, ast::Callable{
+        name: name.into(), 
+        parameters: parameters.unwrap_or(vec![]), 
+        ty: ast::Subprogram::Knot
+    }))
 }
 
 fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
