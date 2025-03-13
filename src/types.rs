@@ -1,4 +1,4 @@
-use crate::ast::{Expression, Content};
+use crate::ast::{Expression};
 
 #[derive(Debug,)]
 pub enum Value {
@@ -21,11 +21,5 @@ pub struct Choice<'ast> {
     post_text: String,
 
     destination: Value,
-}
-
-#[allow(dead_code)]
-struct Weave<'ast> {
-    content: Vec<Content>,
-    choices: Vec<Choice<'ast>>,
 }
 

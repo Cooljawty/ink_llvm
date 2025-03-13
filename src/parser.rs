@@ -26,22 +26,8 @@ use nom::{
 
 use crate::{ast};
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct Knot<I> {
-    signature: ast::Callable, 
-    root: Stitch<I>, 
-    body: Vec<Stitch<I>>,
-}
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct Stitch<I> {
-    signature: ast::Callable,
-    body: I
-}
-
-//type Program = (Vec<Knot>)
-pub fn parse<I>(input: I) -> IResult<I, (Knot<I>, Vec<Knot<I>>) >
+//type Program = (Vec<ast::Knot>)
+pub fn parse<I>(input: I) -> IResult<I, (ast::Knot<I>, Vec<ast::Knot<I>>) >
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -55,7 +41,7 @@ where
     let root_signature = ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], };
 
     let program = (
-        Knot {
+        ast::Knot {
             signature: root_signature, 
             root:      root_root_stitch,
             body:      root_stitches
@@ -70,7 +56,7 @@ where
 }
 
 
-fn knot<I>(input: I) -> IResult<I, Knot<I>>
+fn knot<I>(input: I) -> IResult<I, ast::Knot<I>>
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -81,14 +67,14 @@ where
     let (rem, (root_stitch, stitches)) = knot_body.parse(rem)?;
     println!("== ==");
 
-    Ok ((rem, Knot {
+    Ok ((rem, ast::Knot {
             signature: signature, 
             root:      root_stitch,
             body:      stitches
     }))
 }
 
-fn knot_body<I>(input: I) -> IResult<I, (Stitch<I>, Vec<Stitch<I>>)> 
+fn knot_body<I>(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -114,7 +100,7 @@ where
     
     let (_, (body, stitches)) = (stitch_body, many0(complete(stitch))).parse(body)?;
 
-    let root_stitch = Stitch {
+    let root_stitch = ast::Stitch {
         signature: ast::Callable{ 
             ty: ast::Subprogram::Stitch, 
             name: "__root".into(), 
@@ -125,7 +111,7 @@ where
     Ok((rem, (root_stitch, stitches)))
 }
 
-fn stitch<I>(input: I) -> IResult<I, Stitch<I>>
+fn stitch<I>(input: I) -> IResult<I, ast::Stitch<I>>
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
@@ -140,7 +126,7 @@ where
     let (rem, body) = stitch_body.parse(rem)?;
     //
     println!("= =");
-    Ok((rem, Stitch{signature, body}))
+    Ok((rem, ast::Stitch{signature, body}))
 }
 
 fn stitch_body<I>(input: I) -> IResult<I, I> 
@@ -314,31 +300,31 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: root_name, ..
                     }, 
-                    root: Stitch{ body: root_body, ..},
+                    root: ast::Stitch{ body: root_body, ..},
                     body: root_stitches,
                     ..
                 }, 
             [
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: k1_name, ..
                     }, 
-                    root: Stitch{ body: k1_body, ..},
+                    root: ast::Stitch{ body: k1_body, ..},
                     body: k1_stitches,
                     ..
                 }, 
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: k2_name, ..
                     }, 
-                    root: Stitch{ body: k2_body, ..},
+                    root: ast::Stitch{ body: k2_body, ..},
                     body: k2_stitches,
                     ..
                 }, 
@@ -376,31 +362,31 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: root_name, ..
                     }, 
-                    root: Stitch{ body: root_body, ..},
+                    root: ast::Stitch{ body: root_body, ..},
                     body: root_stitches,
                     ..
                 }, 
             [
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: k1_name, ..
                     }, 
-                    root: Stitch{ body: k1_body, ..},
+                    root: ast::Stitch{ body: k1_body, ..},
                     body: k1_stitches,
                     ..
                 }, 
-                Knot{
+                ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
                         name: k2_name, ..
                     }, 
-                    root: Stitch{ body: k2_body, ..},
+                    root: ast::Stitch{ body: k2_body, ..},
                     body: k2_stitches,
                     ..
                 }, 
@@ -432,12 +418,12 @@ mod tests {
         let (unparsed, knots) = nom::multi::many1(knot).parse(include_str!("../tests/knots_with_parameters.ink"))?;
         match knots.as_slice() {
             [
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k1_parameters, ..}, ..}, 
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k2_parameters, ..}, ..}, 
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k3_parameters, ..}, ..}, 
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k4_parameters, ..}, ..}, 
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k5_parameters, ..}, ..}, 
-                Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k6_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k1_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k2_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k3_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k4_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k5_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k6_parameters, ..}, ..}, 
             ] => {
                 assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
                 assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
