@@ -300,50 +300,44 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                ast::Knot{
+                root @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: root_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: root_body, ..},
-                    body: root_stitches,
                     ..
                 }, 
             [
-                ast::Knot{
+                k1 @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: k1_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: k1_body, ..},
-                    body: k1_stitches,
                     ..
                 }, 
-                ast::Knot{
+                k2 @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: k2_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: k2_body, ..},
-                    body: k2_stitches,
                     ..
                 }, 
             ]) => {
-                assert_eq!(root_name, "__root");
-                assert_ne!(root_body.trim(), "", "Root body parse error");
-                assert_ne!(root_stitches[0].body.trim(), "", "Root stitch body parse error");
+                assert_eq!(root.signature.name, "__root");
+                assert_ne!(root.root.body.trim(), "", "Root body parse error");
+                assert_ne!(root.body[0].body.trim(), "", "Root stitch body parse error");
 
-                assert_eq!(k1_name, "K1");
-                assert_ne!(k1_body.trim(), "", "K1 body parse error");
+                assert_eq!(k1.signature.name, "K1");
+                assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
 
-                assert_eq!(k1_stitches[0].signature.name, "K1_1", "K1_1 body parse error");
-                assert_ne!(k1_stitches[0].body.trim(), "", "K1_1 body parse error");
+                assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
 
-                assert_eq!(k2_name, "K2");
-                assert_eq!(k2_body.trim(), "", "K1 body parse error");
+                assert_eq!(k2.signature.name, "K2");
+                assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
 
-                assert_eq!(k2_stitches[0].signature.name, "K2_1", "K2_1 body parse error");
-                assert_ne!(k2_stitches[0].body.trim(), "", "K2_1 body parse error");
+                assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
@@ -362,50 +356,44 @@ mod tests {
 
         match (root, knots.as_slice()) {
             (
-                ast::Knot{
+                root @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: root_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: root_body, ..},
-                    body: root_stitches,
                     ..
                 }, 
             [
-                ast::Knot{
+                k1 @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: k1_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: k1_body, ..},
-                    body: k1_stitches,
                     ..
                 }, 
-                ast::Knot{
+                k2 @ ast::Knot{
                     signature: ast::Callable {
                         ty: ast::Subprogram::Knot, 
-                        name: k2_name, ..
+                        ..
                     }, 
-                    root: ast::Stitch{ body: k2_body, ..},
-                    body: k2_stitches,
                     ..
                 }, 
             ]) => {
-                assert_eq!(root_name, "__root");
-                assert_eq!(root_body.trim(), "", "Root body parse error");
-                assert!(root_stitches.len() == 0, "Incorectly parsed root knot");
-
-                assert_eq!(k1_name, "K1");
-                assert_ne!(k1_body.trim(), "", "K1 body parse error");
-
-                assert_eq!(k1_stitches[0].signature.name, "K1_1", "K1_1 body parse error");
-                assert_ne!(k1_stitches[0].body.trim(), "", "K1_1 body parse error");
-
-                assert_eq!(k2_name, "K2");
-                assert_eq!(k2_body.trim(), "", "K1 body parse error");
-
-                assert_eq!(k2_stitches[0].signature.name, "K2_1", "K2_1 body parse error");
-                assert_ne!(k2_stitches[0].body.trim(), "", "K2_1 body parse error");
+                assert_eq!(root.signature.name, "__root");
+                assert_eq!(root.root.body.trim(), "", "Root body parse error");
+                assert!(root.body.len() == 0, "Root stitch body parse error");
+                                                                                          
+                assert_eq!(k1.signature.name, "K1");
+                assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
+                                                                                          
+                assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
+                                                                                          
+                assert_eq!(k2.signature.name, "K2");
+                assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
+                                                                                          
+                assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
