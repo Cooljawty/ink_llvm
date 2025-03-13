@@ -1,15 +1,16 @@
 use nom::IResult;
 
 /* Debug printer
-use nom::AsChar;
+
 println!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
 println!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
 */
 
 #[allow(unused_imports)]
 use nom::{
+    AsChar,
     Parser,
-    multi::{many0, many_till, fold_many0,separated_list0,},
+    multi::{many0, many_till, fold_many0,separated_list0,many1},
     bytes::{tag, is_a, take_until,take_till},
     character::{
         anychar,one_of,
@@ -19,7 +20,7 @@ use nom::{
             line_ending, not_line_ending,
         },
     },
-    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,verify},
+    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,verify, complete},
     branch::{alt,},
 };
 
@@ -46,7 +47,10 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    let (remaining, ((root_root_stitch, root_stitches), knots, _)) = (knot_body, many0(knot), alt((line_ending, eof))).parse(input)?;
+    println!("== __root ==");
+    let (remaining, (root_root_stitch, root_stitches)) = knot_body.parse(input)?;
+    println!("= =");
+    let (remaining, (knots, _)) = (many0(knot), alt((line_ending, eof))).parse(remaining)?;
 
     let root_signature = ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], };
 
@@ -58,6 +62,10 @@ where
         },
         knots
     );
+
+    //
+    //println!("\n== {} ==",   program.0.signature.name);
+    //println!("{}\n========", program.0.root.body.iter_elements().map(|c| c.as_char()).collect::<String>());
     Ok((remaining, program))
 }
 
@@ -68,9 +76,11 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
-    println!("Parsing knot");
-    let (rem, (signature, (root_stitch, stitches))) = (knot_signature, knot_body).parse(input)?;
-    println!("End knot");
+    let (rem, signature) = knot_signature.parse(input)?;
+    println!("\n== {} ==", signature.name);
+    let (rem, (root_stitch, stitches)) = knot_body.parse(rem)?;
+    println!("== ==");
+
     Ok ((rem, Knot {
             signature: signature, 
             root:      root_stitch,
@@ -84,7 +94,13 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    println!("Parsing knot body");
+    /*
+    let (rem, body) = recognize(many0((
+            peek(not(recognize(knot_signature))),
+            many0(not_line_ending),
+            alt((line_ending, eof)),
+    ))).parse(input)?;
+    */
     let (rem, body) = match take_until("==").parse(input.clone()) {
         Ok((rem, body)) => {
             peek(recognize(knot_signature)).parse(rem.clone())?;
@@ -96,8 +112,7 @@ where
         err => err?
     };
     
-    println!("Took body input");
-    let (_, (body, stitches)) = (stitch_body, many0(stitch)).parse(body)?;
+    let (_, (body, stitches)) = (stitch_body, many0(complete(stitch))).parse(body)?;
 
     let root_stitch = Stitch {
         signature: ast::Callable{ 
@@ -107,7 +122,6 @@ where
         }, 
         body,
     };
-    println!("end knot body");
     Ok((rem, (root_stitch, stitches)))
 }
 
@@ -117,9 +131,15 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
-    println!("Parsing stitch");
-    let (rem, (signature, body)) = (stitch_signature, stitch_body).parse(input)?;
-    println!("End stitch");
+    let (rem, signature) = stitch_signature.parse(input)?;
+    println!("\n= {}", signature.name);
+
+    println!("input: {:?}\n",
+        rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+    );
+    let (rem, body) = stitch_body.parse(rem)?;
+    //
+    println!("= =");
     Ok((rem, Stitch{signature, body}))
 }
 
@@ -129,10 +149,46 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
-    println!("Parsing stitch body");
-use nom::AsChar;
-println!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().take(1).collect::<String>());
+    
+    //println!(">>>\n{:?}\n>>>\n",
+    //    input.iter_elements().map(|c| c.as_char()).collect::<String>(),
+    //);
 
+    if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
+    
+    let rem = input.clone();
+    let mut body_size = 0;
+    let (rem, body) = loop {
+        let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
+        //println!("line: {:?}", line.iter_elements().map(|c| c.as_char()).collect::<String>());
+
+        let res: IResult<I, ()> = peek(not((
+            space0, 
+            alt(
+                (eof, tag("="))
+            )
+        ))).parse(line.clone());
+        if res.is_ok() { 
+            body_size += line.input_len(); 
+        }
+        else { 
+            break (rem, input.take(body_size)) 
+        }
+    };
+    println!("body: {:?}\nrem: {:?}\n", 
+        body.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        rem.iter_elements().map(|c| c.as_char()).collect::<String>()
+    );
+    /*
+    
+    println!("---\n{}\n>>>\n{}\n<<<\n{}\n---\n",
+        input.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        body.iter_elements().map(|c| c.as_char()).collect::<String>(),
+    );
+    */
+
+    /*
     let (rem, body) = match take_until("=").parse(input.clone()) {
         Ok((rem, body)) => {
             peek(recognize(stitch_signature)).parse(rem.clone())?;
@@ -143,9 +199,8 @@ println!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collec
         },
         err => err?
     };
+    */
     
-println!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().take(1).collect::<String>());
-    println!("End stitch body");
     Ok((rem, body))
 }
 
@@ -207,7 +262,7 @@ where
             c.is_alpha() || c == '_'
         }).parse(input)?;
 
-    use nom::AsChar;
+    
     let name = name.iter_elements().map(|c| c.as_char()).collect();
 
     Ok((rem, name))
@@ -265,6 +320,7 @@ mod tests {
                         name: root_name, ..
                     }, 
                     root: Stitch{ body: root_body, ..},
+                    body: root_stitches,
                     ..
                 }, 
             [
@@ -274,6 +330,7 @@ mod tests {
                         name: k1_name, ..
                     }, 
                     root: Stitch{ body: k1_body, ..},
+                    body: k1_stitches,
                     ..
                 }, 
                 Knot{
@@ -282,17 +339,25 @@ mod tests {
                         name: k2_name, ..
                     }, 
                     root: Stitch{ body: k2_body, ..},
+                    body: k2_stitches,
                     ..
                 }, 
             ]) => {
                 assert_eq!(root_name, "__root");
                 assert_ne!(root_body.trim(), "", "Root body parse error");
+                assert_ne!(root_stitches[0].body.trim(), "", "Root stitch body parse error");
 
                 assert_eq!(k1_name, "K1");
-                assert_ne!(k1_body.trim(), "K1 body parse error");
+                assert_ne!(k1_body.trim(), "", "K1 body parse error");
+
+                assert_eq!(k1_stitches[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert_ne!(k1_stitches[0].body.trim(), "", "K1_1 body parse error");
 
                 assert_eq!(k2_name, "K2");
-                assert_ne!(k2_body.trim(), "K2 body parse error");
+                assert_eq!(k2_body.trim(), "", "K1 body parse error");
+
+                assert_eq!(k2_stitches[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert_ne!(k2_stitches[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };
@@ -317,6 +382,7 @@ mod tests {
                         name: root_name, ..
                     }, 
                     root: Stitch{ body: root_body, ..},
+                    body: root_stitches,
                     ..
                 }, 
             [
@@ -326,6 +392,7 @@ mod tests {
                         name: k1_name, ..
                     }, 
                     root: Stitch{ body: k1_body, ..},
+                    body: k1_stitches,
                     ..
                 }, 
                 Knot{
@@ -334,17 +401,25 @@ mod tests {
                         name: k2_name, ..
                     }, 
                     root: Stitch{ body: k2_body, ..},
+                    body: k2_stitches,
                     ..
                 }, 
             ]) => {
                 assert_eq!(root_name, "__root");
                 assert_eq!(root_body.trim(), "", "Root body parse error");
+                assert!(root_stitches.len() == 0, "Incorectly parsed root knot");
 
                 assert_eq!(k1_name, "K1");
-                assert_ne!(k1_body.trim(), "K1 body parse error");
+                assert_ne!(k1_body.trim(), "", "K1 body parse error");
+
+                assert_eq!(k1_stitches[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert_ne!(k1_stitches[0].body.trim(), "", "K1_1 body parse error");
 
                 assert_eq!(k2_name, "K2");
-                assert_ne!(k2_body.trim(), "K2 body parse error");
+                assert_eq!(k2_body.trim(), "", "K1 body parse error");
+
+                assert_eq!(k2_stitches[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert_ne!(k2_stitches[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
         };

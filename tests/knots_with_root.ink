@@ -1,13 +1,25 @@
-content
+start of story
 
+end of root 
+->END
 = root_stitch
-content
+start of root stitch
+
+end of root stitch
 
 == K1 ===
-content
-= K1_1
-content
+start of K1
 
+end of K1's root
+->END
+
+	= K1_1
+start of K1-1
+
+end of K1-1
   == K2
+
 = K2_1
-content
+start of k2-1
+
+end of k2-1
