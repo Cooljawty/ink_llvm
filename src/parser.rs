@@ -38,6 +38,7 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
+    #[cfg(debug_assertions)]
     {
         print_nom_input!(input);
         eprintln!("== __root ==");
@@ -50,6 +51,7 @@ where
         body:      root_stitches
     };
 
+    #[cfg(debug_assertions)]
     {
         if root_knot.body.len() == 0 { eprintln!("= ="); }
         eprintln!("== ==");
@@ -102,12 +104,14 @@ where
 {   
     let (rem, signature) = knot_signature.parse(input)?;
 
+    #[cfg(debug_assertions)]
     { 
         eprintln!("\n== {} ==", signature.name); 
     }
 
     let (rem, (root, body)) = knot_body.parse(rem)?;
 
+    #[cfg(debug_assertions)]
     {
         eprintln!("== ==");
         print_nom_input!(rem);
@@ -123,9 +127,17 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     let (rem, signature) = stitch_signature.parse(input)?;
-    eprintln!("\n= {}", signature.name);
+
+    #[cfg(debug_assertions)] {
+        eprintln!("\n= {}", signature.name);
+    }
+
     let (rem, body) = stitch_body.parse(rem)?;
-    eprintln!("= =");
+
+    #[cfg(debug_assertions)] {
+        eprintln!("= =");
+    }
+
     Ok((rem, ast::Stitch{signature, body}))
 }
 
@@ -201,6 +213,7 @@ where
         body,
     };
 
+    #[cfg(debug_assertions)]
     {
         print_nom_input!(rem);
     }
@@ -226,12 +239,14 @@ where
 {   
     let (rem, signature) = function_signature.parse(input)?;
 
+    #[cfg(debug_assertions)]
     {
         eprintln!("\n== function {}() ==", signature.name);
     }
 
     let (rem, body) = function_body.parse(rem)?;
 
+    #[cfg(debug_assertions)]
     {
         eprintln!("== ==");
     }
@@ -350,6 +365,7 @@ where
         }
     };
 
+    #[cfg(debug_assertions)]
     {
         print_nom_input!(body, rem);
     }

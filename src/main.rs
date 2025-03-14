@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()>{
     src_file.read_to_string(&mut src)?;
 
     if let Ok((remaining, ast)) = parse(src.as_str()){
-        println!("AST:\n{:?}\n", ast);
+        println!("AST:\n{:#?}\n", ast);
         println!("Unparsed:\n{:?}\n", remaining);
     }
 
