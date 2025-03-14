@@ -1,10 +1,16 @@
 use nom::IResult;
 
-/* Debug printer
-
-eprintln!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
-eprintln!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
-*/
+macro_rules! print_nom_input {
+    ( $($input:expr),* ) => {
+        $(
+            eprintln!("{:name_w$}|{:>count_w$}|: {:?}",
+                stringify!($input), $input.input_len(), 
+                $input.iter_elements().map(|c| c.as_char()).collect::<String>(),
+                name_w = 6, count_w = 3,
+            );
+        )*
+    }
+}
 
 #[allow(unused_imports)]
 use nom::{
@@ -33,9 +39,7 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
     {
-        eprintln!("input({:w$}): {:?}",
-            input.input_len(), input.iter_elements().map(|c| c.as_char()).collect::<String>(),
-            w = 2);
+        print_nom_input!(input);
         eprintln!("== __root ==");
     }
 
@@ -106,10 +110,7 @@ where
 
     {
         eprintln!("== ==");
-        eprintln!("rem ({:w$}): {:?}\n",
-            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-            w = 2,
-         );
+        print_nom_input!(rem);
     }
 
     Ok ((rem, ast::Knot {
@@ -205,10 +206,7 @@ where
     };
 
     {
-        eprintln!("rem ({:w$}): {:?}\n",
-            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-            w = 2,
-         );
+        print_nom_input!(rem);
     }
 
     Ok((rem, (root_stitch, stitches)))
@@ -350,11 +348,7 @@ where
     };
 
     {
-        eprintln!("body({:w$}): {:?}\nrem ({:w$}): {:?}\n",
-            body.input_len(), body.iter_elements().map(|c| c.as_char()).collect::<String>(),
-            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-            w = 2,
-         );
+        print_nom_input!(body, rem);
     }
 
     Ok((rem, body))
