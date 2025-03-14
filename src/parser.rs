@@ -2,8 +2,8 @@ use nom::IResult;
 
 /* Debug printer
 
-println!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
-println!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
+eprintln!("\n>>>>\n{}\n>>>>\n", input.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
+eprintln!("\n<<<<\n{}\n<<<<\n", rem.iter_elements().map(|c| c.as_char()).collect::<String>().as_str().lines().next().unwrap());
 */
 
 #[allow(unused_imports)]
@@ -26,17 +26,72 @@ use nom::{
 
 use crate::{ast};
 
-//type Program = (Vec<ast::Knot>)
-pub fn parse<I>(input: I) -> IResult<I, (ast::Knot<I>, Vec<ast::Knot<I>>) >
+pub fn parse<I>(input: I) -> IResult<I, (ast::Knot<I>, Vec<ast::Knot<I>>, Vec<ast::Function<I>>) >
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    println!("== __root ==");
+    eprintln!("input({:w$}): {:?}",
+        input.input_len(), input.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        w = 2);
+    eprintln!("== __root ==");
     let (remaining, (root_root_stitch, root_stitches)) = knot_body.parse(input)?;
-    println!("= =");
-    let (remaining, (knots, _)) = (many0(knot), alt((line_ending, eof))).parse(remaining)?;
+    if root_stitches.len() == 0 { eprintln!("= ="); }
+    eprintln!("== ==");
+
+    let (remaining, ((knots, functions), _)) = (
+        fold_many0(
+            complete(knot_or_function),
+            ||(Vec::new(), Vec::new()),
+            |(mut knot_acc, mut function_acc), (knot, function)|
+            {
+                match (knot, function) {
+                    (Some(knot), None) => { knot_acc.push(knot); }, 
+                    (None, Some(function)) => { function_acc.push(function); }, 
+                    (None, None) => { panic!("Knot_or_Function returned neither knot nor function, or both"); }
+                    (Some(_), Some(_)) => { panic!("Knot_or_Function returned both a knot and function"); }
+                };
+                (knot_acc, function_acc)
+            }
+        ),
+        alt((line_ending, eof))
+    ).parse(remaining)?;
+
+    /*
+    let mut knots = Vec::new();
+    let mut functions = Vec::new();
+    let input_ptr = RC::new(RefCell::new(remaining));
+    loop {
+        (rem, (consumed, knots)) = many0(knot).parse(input);
+        (rem, (consumed, functions)) = many0(function).parse(input);
+
+        let knots_res = match many1(knot).parse(input) { 
+            Ok((rem, mut knots_i)) => { 
+                eprintln!("Parsed {} knots", knots_i.len());
+                knots.append(&mut knots_i);
+                input_ptr.replace(rem);
+                Ok(knots_i)
+            },
+            err => Err(err),
+        };
+        let functions_res = match many1(function).parse(*input_ptr.borrow()) { 
+            Ok((rem, mut functions_i)) => { 
+                eprintln!("Parsed {} functions", functions_i.len());
+                functions.append(&mut functions_i);
+                input_ptr.replace(rem);
+                Ok(functions_i)
+            },
+            err => Err(err),
+        };
+
+        eprintln!("kn: {:?}, fn: {:?}", knots_res.is_err(), functions_res.is_err());
+        if knots_res.is_err() && functions_res.is_err() {
+            break;
+        } 
+    }
+    */
+    
 
     let root_signature = ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], };
 
@@ -46,16 +101,30 @@ where
             root:      root_root_stitch,
             body:      root_stitches
         },
-        knots
+        knots,
+        functions,
     );
 
-    //
-    //println!("\n== {} ==",   program.0.signature.name);
-    //println!("{}\n========", program.0.root.body.iter_elements().map(|c| c.as_char()).collect::<String>());
     Ok((remaining, program))
 }
 
 
+//Must return a knot or function. Fails if neither parser succeeds
+fn knot_or_function<I>(input: I) -> IResult<I, (Option<ast::Knot<I>>, Option<ast::Function<I>>)>
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{   
+    Ok(match opt(knot).parse(input)? {
+        (rem, Some(knot)) => (rem, (Some(knot), None)),
+        (rem, None) => {
+            let (rem, function) = function.parse(rem)?;
+            (rem, (None, Some(function))) 
+        }
+    })
+}
+//Knots and Stitches
 fn knot<I>(input: I) -> IResult<I, ast::Knot<I>>
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
@@ -63,9 +132,9 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     let (rem, signature) = knot_signature.parse(input)?;
-    println!("\n== {} ==", signature.name);
+    eprintln!("\n== {} ==", signature.name);
     let (rem, (root_stitch, stitches)) = knot_body.parse(rem)?;
-    println!("== ==");
+    eprintln!("== ==");
 
     Ok ((rem, ast::Knot {
             signature: signature, 
@@ -80,16 +149,9 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    /*
-    let (rem, body) = recognize(many0((
-            peek(not(recognize(knot_signature))),
-            many0(not_line_ending),
-            alt((line_ending, eof)),
-    ))).parse(input)?;
-    */
     let (rem, body) = match take_until("==").parse(input.clone()) {
         Ok((rem, body)) => {
-            peek(recognize(knot_signature)).parse(rem.clone())?;
+            peek(recognize(alt((knot_signature, function_signature)))).parse(rem.clone())?;
             (rem, body)
         },
         nom::IResult::Err(nom::Err::Incomplete(_)) => {
@@ -108,6 +170,10 @@ where
         }, 
         body,
     };
+    eprintln!("rem ({:w$}): {:?}\n",
+        rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        w = 2,
+     );
     Ok((rem, (root_stitch, stitches)))
 }
 
@@ -118,14 +184,9 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     let (rem, signature) = stitch_signature.parse(input)?;
-    println!("\n= {}", signature.name);
-
-    println!("input: {:?}\n",
-        rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-    );
+    eprintln!("\n= {}", signature.name);
     let (rem, body) = stitch_body.parse(rem)?;
-    //
-    println!("= =");
+    eprintln!("= =");
     Ok((rem, ast::Stitch{signature, body}))
 }
 
@@ -135,18 +196,22 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
-    
-    //println!(">>>\n{:?}\n>>>\n",
-    //    input.iter_elements().map(|c| c.as_char()).collect::<String>(),
-    //);
+    text_body(input) 
+}
 
+fn text_body<I>(input: I) -> IResult<I, I> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    
     if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
     
     let rem = input.clone();
     let mut body_size = 0;
     let (rem, body) = loop {
         let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
-        //println!("line: {:?}", line.iter_elements().map(|c| c.as_char()).collect::<String>());
 
         let res: IResult<I, ()> = peek(not((
             space0, 
@@ -161,32 +226,12 @@ where
             break (rem, input.take(body_size)) 
         }
     };
-    println!("body: {:?}\nrem: {:?}\n", 
-        body.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        rem.iter_elements().map(|c| c.as_char()).collect::<String>()
-    );
-    /*
-    
-    println!("---\n{}\n>>>\n{}\n<<<\n{}\n---\n",
-        input.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        body.iter_elements().map(|c| c.as_char()).collect::<String>(),
-    );
-    */
+    eprintln!("body({:w$}): {:?}\nrem ({:w$}): {:?}\n",
+        body.input_len(), body.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+        w = 2,
+     );
 
-    /*
-    let (rem, body) = match take_until("=").parse(input.clone()) {
-        Ok((rem, body)) => {
-            peek(recognize(stitch_signature)).parse(rem.clone())?;
-            (rem, body)
-        },
-        nom::IResult::Err(nom::Err::Incomplete(_)) => {
-            input.take_split(input.input_len()-1)
-        },
-        err => err?
-    };
-    */
-    
     Ok((rem, body))
 }
 
@@ -227,6 +272,50 @@ where
         name: name.into(), 
         parameters: parameters.unwrap_or(vec![]), 
         ty: ast::Subprogram::Knot
+    }))
+}
+
+//Functions
+fn function<I>(input: I) -> IResult<I, ast::Function<I>>
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{   
+    let (rem, signature) = function_signature.parse(input)?;
+    eprintln!("\n== function {}() ==", signature.name);
+    let (rem, body) = function_body.parse(rem)?;
+    eprintln!("== ==");
+
+    Ok((rem, ast::Function{signature, body}))
+}
+
+fn function_body<I>(input: I) -> IResult<I, I> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    text_body(input)
+}
+
+fn function_signature<I>(input: I) -> IResult<I, ast::Callable> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    let (rem, (_, (name, _, parameters), _)) =
+    (
+        (space0, tag("=="), opt(is_a("=")), space0, tag("function"), space0),
+        (identifier, space0, opt(parameter_list)),
+        (space0, opt(is_a("=")), line_ending)
+    ).parse(input)?;
+    
+    Ok((rem, ast::Callable{
+        name: name.into(), 
+        parameters: parameters.unwrap_or(vec![]), 
+        ty: ast::Subprogram::Function
     }))
 }
 
@@ -291,7 +380,7 @@ mod tests {
 
     #[test]
     fn parse_knots_with_root() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots)) = parse(include_str!("../tests/knots_with_root.ink"))?;
+        let (unparsed, (root, knots, _functions)) = parse(include_str!("../tests/knots_with_root.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},
@@ -347,7 +436,7 @@ mod tests {
 
     #[test]
     fn parse_knots_without_root() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots)) = parse(include_str!("../tests/knots_without_root.ink"))?;
+        let (unparsed, (root, knots, _functions)) = parse(include_str!("../tests/knots_without_root.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},
@@ -396,6 +485,71 @@ mod tests {
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
+        };
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_knots_and_functions() -> Result<(), Box<dyn std::error::Error>>    {
+        let (unparsed, (root, knots, functions)) = parse(include_str!("../tests/knots_and_functions.ink"))?;
+
+        match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
+            Ok(_) => {},
+            _ => assert!(false, "Incomplete parse. Remaining text: {}:'{}'", unparsed.input_len(), unparsed),
+        };
+
+        match root {
+            root @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  } => {
+                assert_eq!(root.signature.name, "__root");
+                assert_eq!(root.root.body.trim(), "", "Root body parse error");
+                assert!(root.body.len() == 0, "Root stitch body parse error");
+            },
+            _ => {
+                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
+            }
+        };
+
+        match knots.as_slice() {
+            [
+                k1 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+            ] => {
+                assert_eq!(k1.signature.name, "K1");
+                assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
+                                                                                          
+                assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
+                                                                                          
+                assert_eq!(k2.signature.name, "K2");
+                assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
+                                                                                          
+                assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
+            },
+            _ => {
+                panic!("Invalid parse.\nFounc {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 2, unparsed);
+            }
+        };
+        match functions.as_slice() {
+            [
+                f1 @ ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, ..  }, ..  }, 
+                f2 @ ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, ..  }, ..  }, 
+                f3 @ ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, ..  }, ..  }, 
+            ] => {
+                assert_eq!(f1.signature.name, "f1");
+                assert_ne!(f1.body.trim(), "", "f1 body parse error");
+
+                assert_eq!(f2.signature.name, "f2");
+                assert_ne!(f2.body.trim(), "", "f2 body parse error");
+
+                assert_eq!(f3.signature.name, "f3");
+                assert_ne!(f3.body.trim(), "", "f3 body parse error");
+            },
+            _ => { 
+                panic!("Invalid parse.\nFound {} functions, expected {}\nRemaining: \n{:?}\n---", functions.len(), 3, unparsed); 
+            }
+        
         };
 
         Ok(())

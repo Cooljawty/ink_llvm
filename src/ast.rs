@@ -18,14 +18,22 @@ pub enum Subprogram {
     Function,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Knot<I> {
     pub(crate) signature: Callable, 
     pub(crate) root: Stitch<I>, 
     pub(crate) body: Vec<Stitch<I>>,
 }
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Stitch<I> {
+    pub(crate) signature: Callable,
+    pub(crate) body: I
+}
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct Function<I> {
     pub(crate) signature: Callable,
     pub(crate) body: I
 }
