@@ -106,18 +106,14 @@ where
         eprintln!("\n== {} ==", signature.name); 
     }
 
-    let (rem, (root_stitch, stitches)) = knot_body.parse(rem)?;
+    let (rem, (root, body)) = knot_body.parse(rem)?;
 
     {
         eprintln!("== ==");
         print_nom_input!(rem);
     }
 
-    Ok ((rem, ast::Knot {
-            signature: signature, 
-            root:      root_stitch,
-            body:      stitches
-    }))
+    Ok ((rem, ast::Knot { signature, root, body }))
 }
 
 fn stitch<I>(input: I) -> IResult<I, ast::Stitch<I>>
@@ -229,9 +225,16 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     let (rem, signature) = function_signature.parse(input)?;
-    eprintln!("\n== function {}() ==", signature.name);
+
+    {
+        eprintln!("\n== function {}() ==", signature.name);
+    }
+
     let (rem, body) = function_body.parse(rem)?;
-    eprintln!("== ==");
+
+    {
+        eprintln!("== ==");
+    }
 
     Ok((rem, ast::Function{signature, body}))
 }
@@ -369,35 +372,22 @@ mod tests {
             _ => assert!(false, "Incomplete parse. Remaining text: {}:'{}'", unparsed.input_len(), unparsed),
         }
 
-        match (root, knots.as_slice()) {
-            (
-                root @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-            [
-                k1 @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-                k2 @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-            ]) => {
+        match root {
+            root @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_ne!(root.root.body.trim(), "", "Root body parse error");
                 assert_ne!(root.body[0].body.trim(), "", "Root stitch body parse error");
+            },
+            _ => {
+                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
+            }
+        };
 
+        match knots.as_slice() {
+            [
+                k1 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+            ] => {
                 assert_eq!(k1.signature.name, "K1");
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
 
@@ -410,7 +400,9 @@ mod tests {
                 assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
-            _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
+            _ => {
+                panic!("Invalid parse.\nFounc {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 2, unparsed);
+            }
         };
 
         Ok(())
@@ -425,35 +417,22 @@ mod tests {
             _ => assert!(false, "Incomplete parse. Remaining text: {}:'{}'", unparsed.input_len(), unparsed),
         }
 
-        match (root, knots.as_slice()) {
-            (
-                root @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-            [
-                k1 @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-                k2 @ ast::Knot{
-                    signature: ast::Callable {
-                        ty: ast::Subprogram::Knot, 
-                        ..
-                    }, 
-                    ..
-                }, 
-            ]) => {
+        match root {
+            root @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
-                                                                                          
+            },
+            _ => {
+                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
+            }
+        };
+
+        match knots.as_slice() {
+            [
+                k1 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, ..  }, ..  }, 
+            ] => {
                 assert_eq!(k1.signature.name, "K1");
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
                                                                                           
@@ -466,7 +445,9 @@ mod tests {
                 assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
-            _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
+            _ => {
+                panic!("Invalid parse.\nFounc {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 2, unparsed);
+            }
         };
 
         Ok(())
@@ -539,7 +520,7 @@ mod tests {
 
     #[test]
     fn parse_knot_with_parameters() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, knots) = nom::multi::many1(knot).parse(include_str!("../tests/knots_with_parameters.ink"))?;
+        let (unparsed, knots) = nom::multi::many1(complete(knot)).parse(include_str!("../tests/knots_with_parameters.ink"))?;
         match knots.as_slice() {
             [
                 ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k1_parameters, ..}, ..}, 
@@ -556,7 +537,32 @@ mod tests {
                 assert!(matches!(k5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
                 assert!(matches!(k6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
             },
-            _ => { panic!("Invalid parse.\nRemaining: \n{}\n---", unparsed); }
+            _ => { panic!("Invalid parse.\nFound {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 6, unparsed); }, 
+        };
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_functions_with_parameters() -> Result<(), Box<dyn std::error::Error>>    {
+        let (unparsed, functions) = nom::multi::many1(complete(function)).parse(include_str!("../tests/functions_with_parameters.ink"))?;
+        match functions.as_slice() {
+            [
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k1_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k2_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k3_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k4_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k5_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k6_parameters, ..}, ..}, 
+            ] => {
+                assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
+                assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
+                assert!(matches!(k3_parameters.as_slice(), [ast::Parameter{..}, ast::Parameter{..}, ast::Parameter{..}]), "Expected 3 arguments");
+                assert!(matches!(k4_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: false, ..}]), "Expected 1 argument by refrence");
+                assert!(matches!(k5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
+                assert!(matches!(k6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
+            },
+            _ => { panic!("Invalid parse.\nFound {} functions, expected {}\nRemaining: \n{:?}\n---", functions.len(), 6, unparsed); }, 
         };
 
         Ok(())
