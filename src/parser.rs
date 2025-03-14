@@ -28,17 +28,28 @@ use crate::{ast};
 
 pub fn parse<I>(input: I) -> IResult<I, (ast::Knot<I>, Vec<ast::Knot<I>>, Vec<ast::Function<I>>) >
 where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    eprintln!("input({:w$}): {:?}",
-        input.input_len(), input.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        w = 2);
-    eprintln!("== __root ==");
+    {
+        eprintln!("input({:w$}): {:?}",
+            input.input_len(), input.iter_elements().map(|c| c.as_char()).collect::<String>(),
+            w = 2);
+        eprintln!("== __root ==");
+    }
+
     let (remaining, (root_root_stitch, root_stitches)) = knot_body.parse(input)?;
-    if root_stitches.len() == 0 { eprintln!("= ="); }
-    eprintln!("== ==");
+    let root_knot = ast::Knot {
+        signature: ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], },
+        root:      root_root_stitch,
+        body:      root_stitches
+    };
+
+    {
+        if root_knot.body.len() == 0 { eprintln!("= ="); }
+        eprintln!("== ==");
+    }
 
     let (remaining, ((knots, functions), _)) = (
         fold_many0(
@@ -49,6 +60,7 @@ where
                 match (knot, function) {
                     (Some(knot), None) => { knot_acc.push(knot); }, 
                     (None, Some(function)) => { function_acc.push(function); }, 
+                    //TODO: Convert panics to errors
                     (None, None) => { panic!("Knot_or_Function returned neither knot nor function, or both"); }
                     (Some(_), Some(_)) => { panic!("Knot_or_Function returned both a knot and function"); }
                 };
@@ -58,61 +70,13 @@ where
         alt((line_ending, eof))
     ).parse(remaining)?;
 
-    /*
-    let mut knots = Vec::new();
-    let mut functions = Vec::new();
-    let input_ptr = RC::new(RefCell::new(remaining));
-    loop {
-        (rem, (consumed, knots)) = many0(knot).parse(input);
-        (rem, (consumed, functions)) = many0(function).parse(input);
-
-        let knots_res = match many1(knot).parse(input) { 
-            Ok((rem, mut knots_i)) => { 
-                eprintln!("Parsed {} knots", knots_i.len());
-                knots.append(&mut knots_i);
-                input_ptr.replace(rem);
-                Ok(knots_i)
-            },
-            err => Err(err),
-        };
-        let functions_res = match many1(function).parse(*input_ptr.borrow()) { 
-            Ok((rem, mut functions_i)) => { 
-                eprintln!("Parsed {} functions", functions_i.len());
-                functions.append(&mut functions_i);
-                input_ptr.replace(rem);
-                Ok(functions_i)
-            },
-            err => Err(err),
-        };
-
-        eprintln!("kn: {:?}, fn: {:?}", knots_res.is_err(), functions_res.is_err());
-        if knots_res.is_err() && functions_res.is_err() {
-            break;
-        } 
-    }
-    */
-    
-
-    let root_signature = ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], };
-
-    let program = (
-        ast::Knot {
-            signature: root_signature, 
-            root:      root_root_stitch,
-            body:      root_stitches
-        },
-        knots,
-        functions,
-    );
-
-    Ok((remaining, program))
+    Ok((remaining, (root_knot, knots, functions)))
 }
-
 
 //Must return a knot or function. Fails if neither parser succeeds
 fn knot_or_function<I>(input: I) -> IResult<I, (Option<ast::Knot<I>>, Option<ast::Function<I>>)>
 where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
@@ -124,57 +88,35 @@ where
         }
     })
 }
+
 //Knots and Stitches
 fn knot<I>(input: I) -> IResult<I, ast::Knot<I>>
 where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
     let (rem, signature) = knot_signature.parse(input)?;
-    eprintln!("\n== {} ==", signature.name);
+
+    { 
+        eprintln!("\n== {} ==", signature.name); 
+    }
+
     let (rem, (root_stitch, stitches)) = knot_body.parse(rem)?;
-    eprintln!("== ==");
+
+    {
+        eprintln!("== ==");
+        eprintln!("rem ({:w$}): {:?}\n",
+            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+            w = 2,
+         );
+    }
 
     Ok ((rem, ast::Knot {
             signature: signature, 
             root:      root_stitch,
             body:      stitches
     }))
-}
-
-fn knot_body<I>(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{
-    let (rem, body) = match take_until("==").parse(input.clone()) {
-        Ok((rem, body)) => {
-            peek(recognize(alt((knot_signature, function_signature)))).parse(rem.clone())?;
-            (rem, body)
-        },
-        nom::IResult::Err(nom::Err::Incomplete(_)) => {
-            input.take_split(input.input_len()-1)
-        },
-        err => err?
-    };
-    
-    let (_, (body, stitches)) = (stitch_body, many0(complete(stitch))).parse(body)?;
-
-    let root_stitch = ast::Stitch {
-        signature: ast::Callable{ 
-            ty: ast::Subprogram::Stitch, 
-            name: "__root".into(), 
-            parameters: vec![], 
-        }, 
-        body,
-    };
-    eprintln!("rem ({:w$}): {:?}\n",
-        rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        w = 2,
-     );
-    Ok((rem, (root_stitch, stitches)))
 }
 
 fn stitch<I>(input: I) -> IResult<I, ast::Stitch<I>>
@@ -188,51 +130,6 @@ where
     let (rem, body) = stitch_body.parse(rem)?;
     eprintln!("= =");
     Ok((rem, ast::Stitch{signature, body}))
-}
-
-fn stitch_body<I>(input: I) -> IResult<I, I> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    text_body(input) 
-}
-
-fn text_body<I>(input: I) -> IResult<I, I> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    
-    if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
-    
-    let rem = input.clone();
-    let mut body_size = 0;
-    let (rem, body) = loop {
-        let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
-
-        let res: IResult<I, ()> = peek(not((
-            space0, 
-            alt(
-                (eof, tag("="))
-            )
-        ))).parse(line.clone());
-        if res.is_ok() { 
-            body_size += line.input_len(); 
-        }
-        else { 
-            break (rem, input.take(body_size)) 
-        }
-    };
-    eprintln!("body({:w$}): {:?}\nrem ({:w$}): {:?}\n",
-        body.input_len(), body.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
-        w = 2,
-     );
-
-    Ok((rem, body))
 }
 
 fn knot_signature<I>(input: I) -> IResult<I, ast::Callable> 
@@ -273,6 +170,57 @@ where
         parameters: parameters.unwrap_or(vec![]), 
         ty: ast::Subprogram::Knot
     }))
+}
+
+fn knot_body<I>(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    //Note: Knot body consumes input diffrently than the text_body parser.
+    //      Knots contain nested stitches. 
+    //      Thus it needs to search for a full "==" tag instead of any line starting with a '='.
+    let (rem, body) = match take_until("==").parse(input.clone()) {
+        //If parser never reaches the tag then assume all input is in the body
+        nom::IResult::Err(nom::Err::Incomplete(_)) => {
+            input.take_split(input.input_len()-1)
+        },
+        //Check if the remaining line is infact a signature
+        Ok((rem, body)) => {
+            value(body, peek(recognize(alt((knot_signature, function_signature))))).parse(rem.clone())?
+        },
+        err => err?
+    };
+    
+    let (_, (body, stitches)) = (stitch_body, many0(complete(stitch))).parse(body)?;
+
+    let root_stitch = ast::Stitch {
+        signature: ast::Callable{ 
+            ty: ast::Subprogram::Stitch, 
+            name: "__root".into(), 
+            parameters: vec![], 
+        }, 
+        body,
+    };
+
+    {
+        eprintln!("rem ({:w$}): {:?}\n",
+            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+            w = 2,
+         );
+    }
+
+    Ok((rem, (root_stitch, stitches)))
+}
+
+fn stitch_body<I>(input: I) -> IResult<I, I> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    text_body(input) 
 }
 
 //Functions
@@ -372,6 +320,46 @@ where
 
     Ok((rem, param_list))
 }
+
+fn text_body<I>(input: I) -> IResult<I, I> 
+where
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    
+    if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
+    
+    let rem = input.clone();
+    let mut body_size = 0;
+    let (rem, body) = loop {
+        let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
+
+        let res: IResult<I, ()> = peek(not((
+            space0, 
+            alt(
+                (eof, tag("="))
+            )
+        ))).parse(line.clone());
+        if res.is_ok() { 
+            body_size += line.input_len(); 
+        }
+        else { 
+            break (rem, input.take(body_size)) 
+        }
+    };
+
+    {
+        eprintln!("body({:w$}): {:?}\nrem ({:w$}): {:?}\n",
+            body.input_len(), body.iter_elements().map(|c| c.as_char()).collect::<String>(),
+            rem.input_len(), rem.iter_elements().map(|c| c.as_char()).collect::<String>(),
+            w = 2,
+         );
+    }
+
+    Ok((rem, body))
+}
+
 
 #[cfg(test)]
 mod tests {
