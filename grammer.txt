@@ -2,30 +2,58 @@
 //Assume all white spaces are ignored, except for newlines
 //TODO: Define when newlines are ignored
 ## Knots & Stiches
-root:				includes* variable_definition* Knot_body? Knot*
-knot:				'=='[=]* identifer param_list? [=]* Knot_body
-knot_body:			stich*
+root:				includes* variable_definition* knot_body? Knot*
 
-stitch:				'=' identifer param_list? '=' Stitch_body
+knot:				knot_signature knot_body
+knot_body:			stitch*
+
+stitch:				stitch_signature  stitch_body
 stitch_body:		weave* 
 
-function:			'=='[=]* function identifier param_list? Function_body
-function_body:		content*
-param_list:			( '(' (param [',' param ]*)? ')' )
+function:			function_signature Function_body
+function_body:		X_content_block*
+
+knot_signature:		'==' [=]*            identifier parameter_list? [=]*
+function_signature:	'==' [=]* 'function' identifier parameter_list? [=]*
+stitch_signature:	'='                  identifier parameter_list?      
+parameter_list:		( '(' (param [',' param ]*)? ')' )
 param:				'ref'? '->'? identifer
 
 ## Weaves
-weave:				content* (choice weave?)* gather? 
+weave:				X_content_block* ( (choice | conditional_choice_block) weave?)* gather? //Note: Give warning on multiple fallback choices?
 
-choice:						('*' | '+')+ label choice_condition* content ( '[' (text | )* ']' )?
-choice_fallback:			('*' | '+')+ (branch? | '->' content*)? //NOTE: nothing after * or + is legal but gives warning
-conditional_choice_block:	'{' expression ':' ( choice branch )* ('-' 'else' ':' ( choice branch )* '}'
-choice_condition: '{' expression '}'
+choice:				('*' | '+')+ label? choice_condition* X_content_block* ( '[' X_content_block* ']' X_content_block* )?
 
-//NOTE: can be seperated by space or tab, or not seperated at all
+conditional_choice_block: '{' expression     ':' ( choice branch )* ('-' 'else' ':' ( choice branch )* '}'
+
+choice_condition:	'{' expression '}'
+
 gather:				('-')+ label?
+//NOTE: '-'s can be seperated by space or tab, or not seperated at all
 
 label:				'(' identifier ')'
+
+## Content
+content:			text | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
+content_block:	 	      content |				       '{' (						   alternative_block | ( conditional_block | switch_block ) ) '}'
+X_content:			      content | (logic | return) 
+X_content_block:	                       X_content | '{' (						   alternative_block | ( conditional_block | switch_block ) ) '}'
+
+text:	String | alternativve | conditional 
+eval:	expression
+
+alternative:		(alternate_type_sym)?   content* ( '|'         content* )* 
+alternative_block:	(alternate_type ':')  (            '-' X_content_block* )* 
+
+alternate_type_sym:	                '!' |     '&' |       '~'
+alternate_type:		'stopping' | 'once' | 'cycle' | 'shuffle' |'shuffle once' | 'shuffle stopping' 
+
+conditional:		(expression ':') ( (				  )   content_block* )  ( (           '|')   content_block* )?
+condition_list:		                 ( ('-' expression ':') X_content_block* )* ( ('-' 'else' ':') X_content_block* )?
+
+conditional_block:	(			      				   ) condition_list
+switch_block:		( expression ':' conditional_block )
+
 
 ## Branching
 branch:				divert | tunnel | tunnel_return | thread
@@ -33,6 +61,9 @@ divert:				'->' ((identifier | variable) | 'DONE' | 'END')
 tunnel:				divert+ (divert | '->')
 tunnel_return:		'->->' (identifier | variable | 'DONE' | 'END')?
 thread:				'<-' ((identifier | variable) | 'DONE' | 'END')
+
+//Note: while return branches it can only be used in functions, thus it's not treated as a divert
+return:				'~' 'return' (expression | function_call )
 
  
 ## Variables & Lists
@@ -43,27 +74,11 @@ Constant_definition:		'CONST' identifier '=' (Integer | Decimal | sring | consta
 List_definition:	'LIST' identifier '='  ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' )  (',' ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' ) )*
 
 
-## Content
-content:			text | eval | (alternative | alternative_block) | (conditional | conditional_block | switch_block)
-text:				String | alternativve | conditional 
-eval:				'{' string | expression'}'
-
-alternative:		'{' alternate_type_sym ((text | eval)+ | ((divert | tunnel_return) | tunnel | thread) | alternative)? ( '|' ((text | eval)+ | ((divert | tunnel_return) | tunnel | thread) | alternative)? )* '}'
-alternative_block:	'{' alternate_type ':' ( '-' ((text | eval)+ | (logic | return)+ | ((divert | tunnel_return) | tunnel | thread) | (alternative | alternative_block)) ) '}'
-alternate_type:		'stopping' | 'once' | 'cycle' | 'shuffle' |'shuffle once' | 'shuffle stopping' 
-alternate_type_sym:	'!' | '&' | '~'
-
-conditional:		'{' expression ':' (text | alternative | divert)? ( '|' (text | alternative)? )* '}'
-conditional_block:	'{' ('-' expression ':' (text | logic ))+ ('-' 'else' ':' (text | logic | Choice) )? '}'
-switch_block:		'{' expression ':' ('-' expression ':' (text | logic ))* ('-' 'else' ':' (text | logic ) )? '}'
-
-
 ## Logic
 logic:				'~' (expression | function_call | variable_assignment | temp_variable_definition)
-return:				'~' 'return' (expression | function_call )
 
-variable_assignment: identifier '=' (ink_value | variable | constant | literal)
-expression:			literal | variable | constant | '(' expression ')' | (unary_op expression) | (expression bin_op expression)
+variable_assignment:	identifier '=' (ink_value | variable | constant | literal)
+expression:				literal | variable | constant | '(' expression ')' | (unary_op expression) | (expression bin_op expression)
 
 //Note: Integer and Decimal allow leading and following zeros!
 literal:			Integer | Decimal | '"' string '"' | ('true' | 'false') | divert | list_value
