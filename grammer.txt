@@ -11,22 +11,26 @@ stitch:				stitch_signature  stitch_body
 stitch_body:		weave* 
 
 function:			function_signature Function_body
-function_body:		X_content_block*
+function_body:		inline_content_block*
 
 knot_signature:		'==' [=]*            identifier parameter_list? [=]*
 function_signature:	'==' [=]* 'function' identifier parameter_list? [=]*
 stitch_signature:	'='                  identifier parameter_list?      
-parameter_list:		( '(' (param [',' param ]*)? ')' )
+parameter_list:		( '(' (param (',' param )*)? ')' )
 param:				'ref'? '->'? identifer
 
 ## Weaves
-weave:				X_content_block* ( (choice | conditional_choice_block) weave?)* gather? //Note: Give warning on multiple fallback choices?
+weave:				gather? inline_content_block* conditional_choice_block* (choice weave?)* //Note: Give warning on multiple fallback choices?
 
-choice:				('*' | '+')+ label? choice_condition* X_content_block* ( '[' X_content_block* ']' X_content_block* )?
-
-conditional_choice_block: '{' expression     ':' ( choice branch )* ('-' 'else' ':' ( choice branch )* '}'
-
+choice:				('*' | '+')+ ( label Newline? )? ( choice_condition+ )? inline_content_block* ( '[' inline_content_block* ']' )? ( inline_content_block* '->' )?
+//NOTE: Add warning for fallback choice when no choice content
 choice_condition:	'{' expression '}'
+
+conditional_choice_block:	'{' choice_conditional | choice_switch_block | choice_conditional_block '}'
+choice_conditional:			(     expression ':' )  ( (				     )  (        choice branch )* )  ( ('-' 'else' ':') (        choice branch )* )?
+choice_switch_block:		(     expression ':' )  ( ('-' expression ':')  (        choice branch )* )* ( ('-' 'else' ':') (        choice branch )* )?
+choice_conditional_block:	(                    )  ( ('-' expression ':')  (        choice branch )* )* ( ('-' 'else' ':') (        choice branch )* )?
+
 
 gather:				('-')+ label?
 //NOTE: '-'s can be seperated by space or tab, or not seperated at all
@@ -34,34 +38,35 @@ gather:				('-')+ label?
 label:				'(' identifier ')'
 
 ## Content
-content:			text | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
-content_block:	 	      content |				       '{' (						   alternative_block | ( conditional_block | switch_block ) ) '}'
-X_content:			      content | (logic | return) 
-X_content_block:	                       X_content | '{' (						   alternative_block | ( conditional_block | switch_block ) ) '}'
+//TODO: Choice blocks can be in content blocks. Figure that one out
+inline_content_block:	                inline_content | '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
+inline_content:			    content | (logic | return) 
+content_block:	 	        content |				     '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
+content:			String | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
 
-text:	String | alternativve | conditional 
 eval:	expression
 
-alternative:		(alternate_type_sym)?   content* ( '|'         content* )* 
-alternative_block:	(alternate_type ':')  (            '-' X_content_block* )* 
+alternative:				( alternate_type_sym )?  content_block* ( ('|' )  (        content_block )* )* (                                            )
+alternative_block:			( alternate_type ':' )  ( (                '-' )  ( inline_content_block )* )* (                                            )
 
 alternate_type_sym:	                '!' |     '&' |       '~'
 alternate_type:		'stopping' | 'once' | 'cycle' | 'shuffle' |'shuffle once' | 'shuffle stopping' 
 
-conditional:		(expression ':') ( (				  )   content_block* )  ( (           '|')   content_block* )?
-condition_list:		                 ( ('-' expression ':') X_content_block* )* ( ('-' 'else' ':') X_content_block* )?
+conditional:				(     expression ':' )  ( (				     )  (        content_block )* )  ( (           '|') (        content_block )* )?
+conditional_block:			(                    )  ( ('-' expression ':')  ( inline_content_block )* )* ( ('-' 'else' ':') ( inline_content_block )* )?
+switch_block:				(     expression ':' )  ( ('-' expression ':')  ( inline_content_block )* )* ( ('-' 'else' ':') ( inline_content_block )* )?
 
-conditional_block:	(			      				   ) condition_list
-switch_block:		( expression ':' conditional_block )
+//NOTE: General structure of conditionals and alternatives, where Item can be some type of content or choice.
+condition list:				(     expression ':' )? (       <Case Token> )? (               <Item> )* )* ( ( <Else Token> ) (               <Item> )* )?
 
 
 ## Branching
 branch:				divert | tunnel | tunnel_return | thread
 divert:				'->' ((identifier | variable) | 'DONE' | 'END')
 tunnel:				divert+ (divert | '->')
-tunnel_return:		'->->' (identifier | variable | 'DONE' | 'END')?
 thread:				'<-' ((identifier | variable) | 'DONE' | 'END')
 
+tunnel_return:		'->->' (identifier | variable | 'DONE' | 'END')?
 //Note: while return branches it can only be used in functions, thus it's not treated as a divert
 return:				'~' 'return' (expression | function_call )
 
@@ -69,7 +74,9 @@ return:				'~' 'return' (expression | function_call )
 ## Variables & Lists
 Variable_definition:		'VAR' identifier '=' ( ink_value | constant)
 Temp_Variable_definition:	'temp' identifier '=' (ink_value | variable | constant)
-Constant_definition:		'CONST' identifier '=' (Integer | Decimal | sring | constant)
+//NOTE: ALL identifiers share the same scope. the only way to reuse an identifier is to redefine a temp variable with a temp variable
+
+Constant_definition:		'CONST' identifier '=' (Integer | Decimal | '"' String '"' | constant)
 
 List_definition:	'LIST' identifier '='  ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' )  (',' ( identifier | '(' identifier ')' | '(' identifier '=' integer ')' ) )*
 
@@ -77,9 +84,9 @@ List_definition:	'LIST' identifier '='  ( identifier | '(' identifier ')' | '(' 
 ## Logic
 logic:				'~' (expression | function_call | variable_assignment | temp_variable_definition)
 
-variable_assignment:	identifier '=' (ink_value | variable | constant | literal)
 expression:				literal | variable | constant | '(' expression ')' | (unary_op expression) | (expression bin_op expression)
 
+variable_assignment:	identifier '=' (ink_value | variable | constant | literal)
 //Note: Integer and Decimal allow leading and following zeros!
 literal:			Integer | Decimal | '"' string '"' | ('true' | 'false') | divert | list_value
 math_bin_op:		'+' | '-' | '*' | '/' | ('%' | 'mod)
