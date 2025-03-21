@@ -22,7 +22,7 @@ param:				'ref'? '->'? identifer
 ## Weaves
 weave:				gather? inline_content_block* conditional_choice_block* (choice weave?)* //Note: Give warning on multiple fallback choices?
 
-choice:				('*' | '+')+ ( label Newline? )? ( choice_condition+ )? inline_content_block* ( '[' inline_content_block* ']' )? ( inline_content_block* '->' )?
+choice:				( [*]+ | [+]+ ) ( label Newline? )? ( choice_condition+ )? inline_content_block* ( '[' inline_content_block* ']' inline_content_block* )? ('->' | branch)?
 //NOTE: Add warning for fallback choice when no choice content
 choice_condition:	'{' expression '}'
 
@@ -39,10 +39,10 @@ label:				'(' identifier ')'
 
 ## Content
 //TODO: Choice blocks can be in content blocks. Figure that one out
-inline_content_block:	                inline_content | '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
-inline_content:			    content | (logic | return) 
-content_block:	 	        content |				     '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
-content:			String | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
+inline_content_block:	                    inline_content | '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
+inline_content:			        content | (logic | return) 
+       content_block:	        content |				     '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
+       content:			String | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
 
 eval:	expression
 
