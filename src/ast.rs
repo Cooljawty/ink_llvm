@@ -10,24 +10,18 @@ pub struct Signature {
     pub(crate) parameters: Vec<Parameter>
 }
 
-pub trait Subprogram<I> {
+pub trait Subprogram<I> where 
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>
+{
     type Body;
 
-    fn parse(input: I) -> nom::IResult<I, Self> where 
-        Self: Sized,
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
+    fn parse(input: I) -> nom::IResult<I, Self> where Self: Sized;
 
-    fn parse_signature(input: I) -> nom::IResult<I, Signature> where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
+    fn parse_signature(input: I) -> nom::IResult<I, Signature>;
 
-    fn parse_body(input: I) -> nom::IResult<I, Self::Body> where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
+    fn parse_body(input: I) -> nom::IResult<I, Self::Body>;
 }
 
 #[allow(dead_code)]

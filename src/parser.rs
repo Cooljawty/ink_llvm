@@ -97,12 +97,12 @@ where
 
 //Knots and Stitches
 impl<I> ast::Subprogram<I> for ast::Knot<I>
-{
-    fn parse(input: I) -> IResult<I, ast::Knot<I>> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    fn parse(input: I) -> IResult<I, ast::Knot<I>> 
     {   
         let (rem, signature) = ast::Knot::parse_signature.parse(input)?;
 
@@ -123,10 +123,6 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
     }
 
     fn parse_signature(input: I) -> IResult<I, ast::Signature> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     { 
         let (rem, (_, (name, _, parameters), _)) =
         (
@@ -144,10 +140,6 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
     type Body = (ast::Stitch<I>, Vec<ast::Stitch<I>>);
 
     fn parse_body(input: I) -> IResult<I, Self::Body> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     {
         //Note: Knot body consumes input diffrently than the text_body parser.
         //      Knots contain nested stitches. 
@@ -185,12 +177,12 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
 }
 
 impl<I> ast::Subprogram<I> for ast::Stitch<I> 
-{
-    fn parse(input: I) -> IResult<I, ast::Stitch<I>>
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    fn parse(input: I) -> IResult<I, ast::Stitch<I>>
     {   
         let (rem, signature) = ast::Stitch::parse_signature.parse(input)?;
 
@@ -208,10 +200,6 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
     }
 
     fn parse_signature(input: I) -> IResult<I, ast::Signature> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     { 
         let (rem, (_, (name, _, parameters), _)) =
         (
@@ -228,22 +216,17 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
 
     type Body = I;
 
-    fn parse_body(input: I) -> IResult<I, Self::Body> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-    { text_body(input) }
+    fn parse_body(input: I) -> IResult<I, Self::Body> { text_body(input) }
 }
 
 //Functions
 impl<I> ast::Subprogram<I> for ast::Function<I>
-{
-    fn parse(input: I) -> IResult<I, ast::Function<I>>
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    fn parse(input: I) -> IResult<I, ast::Function<I>>
     {   
         let (rem, signature) = ast::Function::parse_signature.parse(input)?;
 
@@ -263,10 +246,6 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
     }
 
     fn parse_signature(input: I) -> IResult<I, ast::Signature> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     { 
         let (rem, (_, (name, _, parameters), _)) =
         (
@@ -282,14 +261,7 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
     }
 
     type Body = I;
-    fn parse_body(input: I) -> IResult<I, Self::Body> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-    { 
-        text_body(input)
-    }
+    fn parse_body(input: I) -> IResult<I, Self::Body> { text_body(input) }
 
 }
 
@@ -403,9 +375,6 @@ mod tests {
                 assert_ne!(root.root.body.trim(), "", "Root body parse error");
                 assert_ne!(root.body[0].body.trim(), "", "Root stitch body parse error");
             },
-            _ => {
-                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
-            }
         };
 
         match knots.as_slice() {
@@ -448,9 +417,6 @@ mod tests {
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
             },
-            _ => {
-                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
-            }
         };
 
         match knots.as_slice() {
@@ -493,9 +459,6 @@ mod tests {
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
             },
-            _ => {
-                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
-            }
         };
 
         match knots.as_slice() {
