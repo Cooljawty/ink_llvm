@@ -46,7 +46,7 @@ where
 
     let (remaining, (root_root_stitch, root_stitches)) = ast::Knot::parse_body.parse(input)?;
     let root_knot = ast::Knot {
-        signature: ast::Callable{ name: "__root".into(), parameters: vec![], },
+        signature: ast::Signature{ name: "__root".into(), parameters: vec![], },
         root:      root_root_stitch,
         body:      root_stitches
     };
@@ -96,11 +96,11 @@ where
 }
 
 //Knots and Stitches
-impl<I> ast::Knot<I>
+impl<I> ast::Subprogram<I> for ast::Knot<I>
 {
     fn parse(input: I) -> IResult<I, ast::Knot<I>> 
     where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     {   
@@ -122,7 +122,7 @@ impl<I> ast::Knot<I>
         Ok ((rem, ast::Knot { signature, root, body }))
     }
 
-    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    fn parse_signature(input: I) -> IResult<I, ast::Signature> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -135,15 +135,17 @@ impl<I> ast::Knot<I>
             (space0, opt(is_a("=")), line_ending)
         ).parse(input)?;
         
-        Ok((rem, ast::Callable{
+        Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
         }))
     }
 
-    fn parse_body(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
+    type Body = (ast::Stitch<I>, Vec<ast::Stitch<I>>);
+
+    fn parse_body(input: I) -> IResult<I, Self::Body> 
     where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     {
@@ -165,7 +167,7 @@ impl<I> ast::Knot<I>
         let (_, (body, stitches)) = (ast::Stitch::parse_body, many0(complete(ast::Stitch::parse))).parse(body)?;
 
         let root_stitch = ast::Stitch {
-            signature: ast::Callable{ 
+            signature: ast::Signature{ 
                 name: "__root".into(), 
                 parameters: vec![], 
             }, 
@@ -205,7 +207,7 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
         Ok((rem, ast::Stitch{signature, body}))
     }
 
-    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    fn parse_signature(input: I) -> IResult<I, ast::Signature> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -218,13 +220,15 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
             (space0, line_ending)
         ).parse(input)?;
         
-        Ok((rem, ast::Callable{
+        Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
         }))
     }
 
-    fn parse_body(input: I) -> IResult<I, I> 
+    type Body = I;
+
+    fn parse_body(input: I) -> IResult<I, Self::Body> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -258,7 +262,7 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
         Ok((rem, ast::Function{signature, body}))
     }
 
-    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    fn parse_signature(input: I) -> IResult<I, ast::Signature> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -271,13 +275,14 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
             (space0, opt(is_a("=")), line_ending)
         ).parse(input)?;
         
-        Ok((rem, ast::Callable{
+        Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
         }))
     }
 
-    fn parse_body(input: I) -> IResult<I, I> 
+    type Body = I;
+    fn parse_body(input: I) -> IResult<I, Self::Body> 
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -393,7 +398,7 @@ mod tests {
         }
 
         match root {
-            root @ ast::Knot{ signature: ast::Callable {..}, ..  } => {
+            root @ ast::Knot{ signature: ast::Signature {..}, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_ne!(root.root.body.trim(), "", "Root body parse error");
                 assert_ne!(root.body[0].body.trim(), "", "Root stitch body parse error");
@@ -405,8 +410,8 @@ mod tests {
 
         match knots.as_slice() {
             [
-                k1 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
-                k2 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
+                k1 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
@@ -438,7 +443,7 @@ mod tests {
         }
 
         match root {
-            root @ ast::Knot{ signature: ast::Callable {..}, ..  } => {
+            root @ ast::Knot{ signature: ast::Signature {..}, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
@@ -450,8 +455,8 @@ mod tests {
 
         match knots.as_slice() {
             [
-                k1 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
-                k2 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
+                k1 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
@@ -483,7 +488,7 @@ mod tests {
         };
 
         match root {
-            root @ ast::Knot{ signature: ast::Callable {..}, ..  } => {
+            root @ ast::Knot{ signature: ast::Signature {..}, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
@@ -495,8 +500,8 @@ mod tests {
 
         match knots.as_slice() {
             [
-                k1 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
-                k2 @ ast::Knot{ signature: ast::Callable {..}, ..  }, 
+                k1 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
@@ -516,9 +521,9 @@ mod tests {
         };
         match functions.as_slice() {
             [
-                f1 @ ast::Function{ signature: ast::Callable {..}, ..  }, 
-                f2 @ ast::Function{ signature: ast::Callable {..}, ..  }, 
-                f3 @ ast::Function{ signature: ast::Callable {..}, ..  }, 
+                f1 @ ast::Function{ signature: ast::Signature {..}, ..  }, 
+                f2 @ ast::Function{ signature: ast::Signature {..}, ..  }, 
+                f3 @ ast::Function{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(f1.signature.name, "f1");
                 assert_ne!(f1.body.trim(), "", "f1 body parse error");
@@ -543,12 +548,12 @@ mod tests {
         let (unparsed, knots) = nom::multi::many1(complete(ast::Knot::parse)).parse(include_str!("../tests/knots_with_parameters.ink"))?;
         match knots.as_slice() {
             [
-                ast::Knot{ signature: ast::Callable { parameters: k1_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Callable { parameters: k2_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Callable { parameters: k3_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Callable { parameters: k4_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Callable { parameters: k5_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Callable { parameters: k6_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k1_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k2_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k3_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k4_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k5_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k6_parameters, ..}, ..}, 
             ] => {
                 assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
                 assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
@@ -568,12 +573,12 @@ mod tests {
         let (unparsed, functions) = nom::multi::many1(complete(ast::Function::parse)).parse(include_str!("../tests/functions_with_parameters.ink"))?;
         match functions.as_slice() {
             [
-                ast::Function{ signature: ast::Callable { parameters: k1_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Callable { parameters: k2_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Callable { parameters: k3_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Callable { parameters: k4_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Callable { parameters: k5_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Callable { parameters: k6_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k1_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k2_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k3_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k4_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k5_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: k6_parameters, ..}, ..}, 
             ] => {
                 assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
                 assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");

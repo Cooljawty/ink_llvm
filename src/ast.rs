@@ -5,24 +5,26 @@ pub type Identifier = String;
 
 #[allow(dead_code)]
 #[derive(Debug,)]
-pub struct Callable {
+pub struct Signature {
     pub(crate) name: Identifier,
     pub(crate) parameters: Vec<Parameter>
 }
 
 pub trait Subprogram<I> {
+    type Body;
+
     fn parse(input: I) -> nom::IResult<I, Self> where 
         Self: Sized,
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
 
-    fn parse_signature(input: I) -> nom::IResult<I, Callable> where
+    fn parse_signature(input: I) -> nom::IResult<I, Signature> where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
 
-    fn parse_body(input: I) -> nom::IResult<I, I> where
+    fn parse_body(input: I) -> nom::IResult<I, Self::Body> where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>;
@@ -31,7 +33,7 @@ pub trait Subprogram<I> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Knot<I> {
-    pub(crate) signature: Callable, 
+    pub(crate) signature: Signature, 
     pub(crate) root: Stitch<I>, 
     pub(crate) body: Vec<Stitch<I>>,
 }
@@ -39,14 +41,14 @@ pub struct Knot<I> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Stitch<I> {
-    pub(crate) signature: Callable,
+    pub(crate) signature: Signature,
     pub(crate) body: I
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Function<I> {
-    pub(crate) signature: Callable,
+    pub(crate) signature: Signature,
     pub(crate) body: I
 }
 
@@ -81,16 +83,16 @@ pub struct ChoiceBlock<I> {
 
 #[allow(dead_code)]
 pub enum Target {
-    Callable,
+    Signature,
     Weave,
     Choice, //Yeah... you can do that
 }
 
 #[allow(dead_code)]
 pub enum Branch {
-    Divert(Identifier), // -> <Callable>
-    Tunnel(Identifier), // -> <Callable> -> Divert | Tunnel
-    Thread(Identifier), // <- <Callable>
+    Divert(Identifier), // -> <Signature>
+    Tunnel(Identifier), // -> <Signature> -> Divert | Tunnel
+    Thread(Identifier), // <- <Signature>
 
     ReturnTunnel, // ->->
     Return(Option<Expression>), // ~ return <Expression>
