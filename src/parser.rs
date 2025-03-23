@@ -1,4 +1,3 @@
-use std::{sync::Mutex, collections::HashMap, };
 use nom::IResult;
 
 macro_rules! print_nom_input {
@@ -45,7 +44,7 @@ where
         eprintln!("== __root ==");
     }
 
-    let (remaining, (root_root_stitch, root_stitches)) = knot_body.parse(input)?;
+    let (remaining, (root_root_stitch, root_stitches)) = ast::Knot::parse_body.parse(input)?;
     let root_knot = ast::Knot {
         signature: ast::Callable{ ty: ast::Subprogram::Knot, name: "__root".into(), parameters: vec![], },
         root:      root_root_stitch,
@@ -87,201 +86,213 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {   
-    Ok(match opt(knot).parse(input)? {
+    Ok(match opt(ast::Knot::parse).parse(input)? {
         (rem, Some(knot)) => (rem, (Some(knot), None)),
         (rem, None) => {
-            let (rem, function) = function.parse(rem)?;
+            let (rem, function) = ast::Function::parse.parse(rem)?;
             (rem, (None, Some(function))) 
         }
     })
 }
 
 //Knots and Stitches
-fn knot<I>(input: I) -> IResult<I, ast::Knot<I>>
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{   
-    let (rem, signature) = knot_signature.parse(input)?;
-
-    #[cfg(debug_assertions)]
-    { 
-        eprintln!("\n== {} ==", signature.name); 
-    }
-
-    let (rem, (root, body)) = knot_body.parse(rem)?;
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("== ==");
-        print_nom_input!(rem);
-    }
-
-    Ok ((rem, ast::Knot { signature, root, body }))
-}
-
-fn stitch<I>(input: I) -> IResult<I, ast::Stitch<I>>
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{   
-    let (rem, signature) = stitch_signature.parse(input)?;
-
-    #[cfg(debug_assertions)] {
-        eprintln!("\n= {}", signature.name);
-    }
-
-    let (rem, body) = stitch_body.parse(rem)?;
-
-    #[cfg(debug_assertions)] {
-        eprintln!("= =");
-    }
-
-    Ok((rem, ast::Stitch{signature, body}))
-}
-
-fn knot_signature<I>(input: I) -> IResult<I, ast::Callable> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    let (rem, (_, (name, _, parameters), _)) =
-    (
-        (space0, tag("=="), opt(is_a("=")), space0),
-        (identifier, space0, opt(parameter_list)),
-        (space0, opt(is_a("=")), line_ending)
-    ).parse(input)?;
-    
-    Ok((rem, ast::Callable{
-        name: name.into(), 
-        parameters: parameters.unwrap_or(vec![]), 
-        ty: ast::Subprogram::Knot
-    }))
-}
-
-fn stitch_signature<I>(input: I) -> IResult<I, ast::Callable> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    let (rem, (_, (name, _, parameters), _)) =
-    (
-        (space0, tag("="), space0),
-        (identifier, space0, opt(parameter_list)),
-        (space0, line_ending)
-    ).parse(input)?;
-    
-    Ok((rem, ast::Callable{
-        name: name.into(), 
-        parameters: parameters.unwrap_or(vec![]), 
-        ty: ast::Subprogram::Knot
-    }))
-}
-
-fn knot_body<I>(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+impl<I> ast::Knot<I>
 {
-    //Note: Knot body consumes input diffrently than the text_body parser.
-    //      Knots contain nested stitches. 
-    //      Thus it needs to search for a full "==" tag instead of any line starting with a '='.
-    let (rem, body) = match take_until("==").parse(input.clone()) {
-        //If parser never reaches the tag then assume all input is in the body
-        nom::IResult::Err(nom::Err::Incomplete(_)) => {
-            input.take_split(input.input_len()-1)
-        },
-        //Check if the remaining line is infact a signature
-        Ok((rem, body)) => {
-            value(body, peek(recognize(alt((knot_signature, function_signature))))).parse(rem.clone())?
-        },
-        err => err?
-    };
-    
-    let (_, (body, stitches)) = (stitch_body, many0(complete(stitch))).parse(body)?;
+    fn parse(input: I) -> IResult<I, ast::Knot<I>> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    {   
+        let (rem, signature) = ast::Knot::parse_signature.parse(input)?;
 
-    let root_stitch = ast::Stitch {
-        signature: ast::Callable{ 
-            ty: ast::Subprogram::Stitch, 
-            name: "__root".into(), 
-            parameters: vec![], 
-        }, 
-        body,
-    };
+        #[cfg(debug_assertions)]
+        { 
+            eprintln!("\n== {} ==", signature.name); 
+        }
 
-    #[cfg(debug_assertions)]
-    {
-        print_nom_input!(rem);
+        let (rem, (root, body)) = ast::Knot::parse_body.parse(rem)?;
+
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("== ==");
+            print_nom_input!(rem);
+        }
+
+        Ok ((rem, ast::Knot { signature, root, body }))
     }
 
-    Ok((rem, (root_stitch, stitches)))
+    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        let (rem, (_, (name, _, parameters), _)) =
+        (
+            (space0, tag("=="), opt(is_a("=")), space0),
+            (identifier, space0, opt(parameter_list)),
+            (space0, opt(is_a("=")), line_ending)
+        ).parse(input)?;
+        
+        Ok((rem, ast::Callable{
+            name: name.into(), 
+            parameters: parameters.unwrap_or(vec![]), 
+            ty: ast::Subprogram::Knot
+        }))
+    }
+
+    fn parse_body(input: I) -> IResult<I, (ast::Stitch<I>, Vec<ast::Stitch<I>>)> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    {
+        //Note: Knot body consumes input diffrently than the text_body parser.
+        //      Knots contain nested stitches. 
+        //      Thus it needs to search for a full "==" tag instead of any line starting with a '='.
+        let (rem, body) = match take_until("==").parse(input.clone()) {
+            //If parser never reaches the tag then assume all input is in the body
+            nom::IResult::Err(nom::Err::Incomplete(_)) => {
+                input.take_split(input.input_len()-1)
+            },
+            //Check if the remaining line is infact a signature
+            Ok((rem, body)) => {
+                value(body, peek(recognize(alt((ast::Knot::parse_signature, ast::Function::parse_signature))))).parse(rem.clone())?
+            },
+            err => err?
+        };
+        
+        let (_, (body, stitches)) = (ast::Stitch::parse_body, many0(complete(ast::Stitch::parse))).parse(body)?;
+
+        let root_stitch = ast::Stitch {
+            signature: ast::Callable{ 
+                ty: ast::Subprogram::Stitch, 
+                name: "__root".into(), 
+                parameters: vec![], 
+            }, 
+            body,
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            print_nom_input!(rem);
+        }
+
+        Ok((rem, (root_stitch, stitches)))
+    }
+
 }
 
-fn stitch_body<I>(input: I) -> IResult<I, I> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    text_body(input) 
+impl<I> ast::Stitch<I> 
+{
+    fn parse(input: I) -> IResult<I, ast::Stitch<I>>
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    {   
+        let (rem, signature) = ast::Stitch::parse_signature.parse(input)?;
+
+        #[cfg(debug_assertions)] {
+            eprintln!("\n= {}", signature.name);
+        }
+
+        let (rem, body) = ast::Stitch::parse_body.parse(rem)?;
+
+        #[cfg(debug_assertions)] {
+            eprintln!("= =");
+        }
+
+        Ok((rem, ast::Stitch{signature, body}))
+    }
+
+    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        let (rem, (_, (name, _, parameters), _)) =
+        (
+            (space0, tag("="), space0),
+            (identifier, space0, opt(parameter_list)),
+            (space0, line_ending)
+        ).parse(input)?;
+        
+        Ok((rem, ast::Callable{
+            name: name.into(), 
+            parameters: parameters.unwrap_or(vec![]), 
+            ty: ast::Subprogram::Knot
+        }))
+    }
+
+    fn parse_body(input: I) -> IResult<I, I> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        text_body(input) 
+    }
+
 }
 
 //Functions
-fn function<I>(input: I) -> IResult<I, ast::Function<I>>
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{   
-    let (rem, signature) = function_signature.parse(input)?;
+impl<I> ast::Function<I>
+{
+    fn parse(input: I) -> IResult<I, ast::Function<I>>
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    {   
+        let (rem, signature) = ast::Function::parse_signature.parse(input)?;
 
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("\n== function {}() ==", signature.name);
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("\n== function {}() ==", signature.name);
+        }
+
+        let (rem, body) = ast::Function::parse_body.parse(rem)?;
+
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("== ==");
+        }
+
+        Ok((rem, ast::Function{signature, body}))
     }
 
-    let (rem, body) = function_body.parse(rem)?;
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("== ==");
+    fn parse_signature(input: I) -> IResult<I, ast::Callable> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        let (rem, (_, (name, _, parameters), _)) =
+        (
+            (space0, tag("=="), opt(is_a("=")), space0, tag("function"), space0),
+            (identifier, space0, opt(parameter_list)),
+            (space0, opt(is_a("=")), line_ending)
+        ).parse(input)?;
+        
+        Ok((rem, ast::Callable{
+            name: name.into(), 
+            parameters: parameters.unwrap_or(vec![]), 
+            ty: ast::Subprogram::Function
+        }))
     }
 
-    Ok((rem, ast::Function{signature, body}))
-}
+    fn parse_body(input: I) -> IResult<I, I> 
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        text_body(input)
+    }
 
-fn function_body<I>(input: I) -> IResult<I, I> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    text_body(input)
-}
-
-fn function_signature<I>(input: I) -> IResult<I, ast::Callable> 
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    let (rem, (_, (name, _, parameters), _)) =
-    (
-        (space0, tag("=="), opt(is_a("=")), space0, tag("function"), space0),
-        (identifier, space0, opt(parameter_list)),
-        (space0, opt(is_a("=")), line_ending)
-    ).parse(input)?;
-    
-    Ok((rem, ast::Callable{
-        name: name.into(), 
-        parameters: parameters.unwrap_or(vec![]), 
-        ty: ast::Subprogram::Function
-    }))
 }
 
 fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
@@ -537,7 +548,7 @@ mod tests {
 
     #[test]
     fn parse_knot_with_parameters() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, knots) = nom::multi::many1(complete(knot)).parse(include_str!("../tests/knots_with_parameters.ink"))?;
+        let (unparsed, knots) = nom::multi::many1(complete(ast::Knot::parse)).parse(include_str!("../tests/knots_with_parameters.ink"))?;
         match knots.as_slice() {
             [
                 ast::Knot{ signature: ast::Callable { ty: ast::Subprogram::Knot, parameters: k1_parameters, ..}, ..}, 
@@ -562,7 +573,7 @@ mod tests {
 
     #[test]
     fn parse_functions_with_parameters() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, functions) = nom::multi::many1(complete(function)).parse(include_str!("../tests/functions_with_parameters.ink"))?;
+        let (unparsed, functions) = nom::multi::many1(complete(ast::Function::parse)).parse(include_str!("../tests/functions_with_parameters.ink"))?;
         match functions.as_slice() {
             [
                 ast::Function{ signature: ast::Callable { ty: ast::Subprogram::Function, parameters: k1_parameters, ..}, ..}, 
