@@ -11,10 +11,10 @@ pub enum Value {
 }
 
 #[allow(dead_code)]
-pub struct Choice<'ast> {
+pub struct Choice {
     index: usize,
 
-    condition: Option<Expression<'ast>>,
+    condition: Option<Expression>,
 
     text: String,
     choice_text: String,
