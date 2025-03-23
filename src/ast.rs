@@ -26,6 +26,10 @@ pub trait Subprogram<I> where
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
+pub struct Story<I>(pub Knot<I>, pub Vec<Knot<I>>, pub Vec<Function<I>>);
+
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Knot<I> {
     pub(crate) signature: Signature, 

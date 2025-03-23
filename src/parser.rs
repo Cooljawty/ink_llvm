@@ -32,73 +32,104 @@ use nom::{
 
 use crate::{ast, ast::Subprogram, };
 
-pub fn parse<I>(input: I) -> IResult<I, (ast::Knot<I>, Vec<ast::Knot<I>>, Vec<ast::Function<I>>) >
-where
+impl<I> ast::Story<I> where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    #[cfg(debug_assertions)]
+    pub fn parse(input: I) -> IResult<I, Self>
     {
-        print_nom_input!(input);
-        eprintln!("== __root ==");
-    }
-
-    let (remaining, (root_root_stitch, root_stitches)) = ast::Knot::parse_body.parse(input)?;
-    let root_knot = ast::Knot {
-        signature: ast::Signature{ name: "__root".into(), parameters: vec![], ret: None},
-        root:      root_root_stitch,
-        body:      root_stitches
-    };
-
-    #[cfg(debug_assertions)]
-    {
-        if root_knot.body.len() == 0 { eprintln!("= ="); }
-        eprintln!("== ==");
-    }
-
-    let (remaining, ((knots, functions), _)) = (
-        fold_many0(
-            complete(knot_or_function),
-            ||(Vec::new(), Vec::new()),
-            |(mut knot_acc, mut function_acc), (knot, function)|
-            {
-                match (knot, function) {
-                    (Some(knot), None) => { knot_acc.push(knot); }, 
-                    (None, Some(function)) => { function_acc.push(function); }, 
-                    //TODO: Convert panics to errors
-                    (None, None) => { panic!("Knot_or_Function returned neither knot nor function, or both"); }
-                    (Some(_), Some(_)) => { panic!("Knot_or_Function returned both a knot and function"); }
-                };
-                (knot_acc, function_acc)
-            }
-        ),
-        alt((line_ending, eof))
-    ).parse(remaining)?;
-
-    Ok((remaining, (root_knot, knots, functions)))
-}
-
-//Must return a knot or function. Fails if neither parser succeeds
-fn knot_or_function<I>(input: I) -> IResult<I, (Option<ast::Knot<I>>, Option<ast::Function<I>>)>
-where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{   
-    Ok(match opt(ast::Knot::parse).parse(input)? {
-        (rem, Some(knot)) => (rem, (Some(knot), None)),
-        (rem, None) => {
-            let (rem, function) = ast::Function::parse.parse(rem)?;
-            (rem, (None, Some(function))) 
+        #[cfg(debug_assertions)]
+        {
+            print_nom_input!(input);
+            eprintln!("== __root ==");
         }
-    })
+
+        let (remaining, (root_root_stitch, root_stitches)) = ast::Knot::parse_body.parse(input)?;
+        let root_knot = ast::Knot {
+            signature: ast::Signature{ name: "__root".into(), parameters: vec![], ret: None},
+            root:      root_root_stitch,
+            body:      root_stitches
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            if root_knot.body.len() == 0 { eprintln!("= ="); }
+            eprintln!("== ==");
+        }
+
+        let (remaining, ((knots, functions), _)) = (
+            fold_many0(
+                complete(Self::knot_or_function),
+                ||(Vec::new(), Vec::new()),
+                |(mut knot_acc, mut function_acc), (knot, function)|
+                {
+                    match (knot, function) {
+                        (Some(knot), None) => { knot_acc.push(knot); }, 
+                        (None, Some(function)) => { function_acc.push(function); }, 
+                        //TODO: Convert panics to errors
+                        (None, None) => { panic!("Knot_or_Function returned neither knot nor function, or both"); }
+                        (Some(_), Some(_)) => { panic!("Knot_or_Function returned both a knot and function"); }
+                    };
+                    (knot_acc, function_acc)
+                }
+            ),
+            alt((line_ending, eof))
+        ).parse(remaining)?;
+
+        Ok((remaining, ast::Story(root_knot, knots, functions)))
+    }
+
+    //Must return a knot or function. Fails if neither parser succeeds
+    fn knot_or_function(input: I) -> IResult<I, (Option<ast::Knot<I>>, Option<ast::Function<I>>)>
+    {   
+        Ok(match opt(ast::Knot::parse).parse(input)? {
+            (rem, Some(knot)) => (rem, (Some(knot), None)),
+            (rem, None) => {
+                let (rem, function) = ast::Function::parse.parse(rem)?;
+                (rem, (None, Some(function))) 
+            }
+        })
+    }
+
+    fn text_body(input: I) -> IResult<I, I> 
+    { 
+        
+        if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
+        
+        let rem = input.clone();
+        let mut body_size = 0;
+        let (rem, body) = loop {
+            let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
+
+            let res: IResult<I, ()> = peek(not((
+                space0, 
+                alt(
+                    (eof, tag("="))
+                )
+            ))).parse(line.clone());
+            if res.is_ok() { 
+                body_size += line.input_len(); 
+            }
+            else { 
+                break (rem, input.take(body_size)) 
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            print_nom_input!(body, rem);
+        }
+
+        Ok((rem, body))
+    }
+
 }
 
 //Knots and Stitches
 impl<I> ast::Subprogram<I> for ast::Knot<I>
     where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -180,7 +211,7 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
 
 impl<I> ast::Subprogram<I> for ast::Stitch<I> 
     where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -219,13 +250,13 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
 
     type Body = I;
 
-    fn parse_body(input: I) -> IResult<I, Self::Body> { text_body(input) }
+    fn parse_body(input: I) -> IResult<I, Self::Body> { ast::Story::text_body(input) }
 }
 
 //Functions
 impl<I> ast::Subprogram<I> for ast::Function<I>
     where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -265,7 +296,7 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
     }
 
     type Body = I;
-    fn parse_body(input: I) -> IResult<I, Self::Body> { text_body(input) }
+    fn parse_body(input: I) -> IResult<I, Self::Body> { ast::Story::text_body(input) }
 
 }
 
@@ -323,42 +354,6 @@ where
     Ok((rem, param_list))
 }
 
-fn text_body<I>(input: I) -> IResult<I, I> 
-where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
-    <I as nom::Input>::Item: nom::AsChar,
-    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-{ 
-    
-    if input.input_len() == 0 { return Ok((input.clone(), input.take_from(0))) }
-    
-    let rem = input.clone();
-    let mut body_size = 0;
-    let (rem, body) = loop {
-        let (rem, line) = peek(recognize((not_line_ending, opt(line_ending)))).parse(rem.take_from(body_size))?;
-
-        let res: IResult<I, ()> = peek(not((
-            space0, 
-            alt(
-                (eof, tag("="))
-            )
-        ))).parse(line.clone());
-        if res.is_ok() { 
-            body_size += line.input_len(); 
-        }
-        else { 
-            break (rem, input.take(body_size)) 
-        }
-    };
-
-    #[cfg(debug_assertions)]
-    {
-        print_nom_input!(body, rem);
-    }
-
-    Ok((rem, body))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,7 +361,7 @@ mod tests {
 
     #[test]
     fn parse_knots_with_root() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots, _functions)) = parse(include_str!("../tests/knots_with_root.ink"))?;
+        let (unparsed, ast::Story(root, knots, _functions)) = ast::Story::parse(include_str!("../tests/knots_with_root.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},
@@ -416,7 +411,7 @@ mod tests {
 
     #[test]
     fn parse_knots_without_root() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots, _functions)) = parse(include_str!("../tests/knots_without_root.ink"))?;
+        let (unparsed, ast::Story(root, knots, _functions)) = ast::Story::parse(include_str!("../tests/knots_without_root.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},
@@ -465,7 +460,7 @@ mod tests {
 
     #[test]
     fn parse_knots_and_functions() -> Result<(), Box<dyn std::error::Error>>    {
-        let (unparsed, (root, knots, functions)) = parse(include_str!("../tests/knots_and_functions.ink"))?;
+        let (unparsed, ast::Story(root, knots, functions)) = ast::Story::parse(include_str!("../tests/knots_and_functions.ink"))?;
 
         match eof::<&str,nom::error::Error<&str>>.parse(unparsed) {
             Ok(_) => {},

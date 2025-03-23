@@ -2,7 +2,7 @@ use std::fs::File;
 use std::env;
 use std::io::Read;
 
-use ink_llvm::parser::parse;
+use ink_llvm::ast::Story;
 
 fn main() -> std::io::Result<()>{
    
@@ -11,7 +11,7 @@ fn main() -> std::io::Result<()>{
     let mut src = String::new();
     src_file.read_to_string(&mut src)?;
 
-    if let Ok((remaining, ast)) = parse(src.as_str()){
+    if let Ok((remaining, ast)) = Story::parse(src.as_str()){
         println!("AST:\n{:#?}\n", ast);
         println!("Unparsed:\n{:?}\n", remaining);
     }
