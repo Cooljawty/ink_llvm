@@ -39,10 +39,10 @@ label:				'(' identifier ')'
 
 ## Content
 //TODO: Choice blocks can be in content blocks. Figure that one out
-inline_content_block:	                    inline_content | '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
+inline_content_block:	                    inline_content | '{' (		  alternative_block | ( conditional_block | switch_block ) ) '}'
 inline_content:			        content | (logic | return) 
-       content_block:	        content |				     '{' (						     alternative_block | ( conditional_block | switch_block ) ) '}'
-       content:			String | branch |                    '{' ( eval | (logic | return) |       alternative | (                      conditional ) ) '}'
+       content_block:	        content |				     '{' (		  alternative_block | ( conditional_block | switch_block ) ) '}'
+       content:			String | branch |                    '{' ( eval |       alternative | (                      conditional ) ) '}'
 
 eval:	expression
 
