@@ -7,7 +7,8 @@ pub type Identifier = String;
 #[derive(Debug,)]
 pub struct Signature {
     pub(crate) name: Identifier,
-    pub(crate) parameters: Vec<Parameter>
+    pub(crate) parameters: Vec<Parameter>,
+    pub(crate) ret: Option<Value>,
 }
 
 pub trait Subprogram<I> where 

@@ -46,7 +46,7 @@ where
 
     let (remaining, (root_root_stitch, root_stitches)) = ast::Knot::parse_body.parse(input)?;
     let root_knot = ast::Knot {
-        signature: ast::Signature{ name: "__root".into(), parameters: vec![], },
+        signature: ast::Signature{ name: "__root".into(), parameters: vec![], ret: None},
         root:      root_root_stitch,
         body:      root_stitches
     };
@@ -134,6 +134,7 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
         Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
+            ret: None,
         }))
     }
 
@@ -162,6 +163,7 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
             signature: ast::Signature{ 
                 name: "__root".into(), 
                 parameters: vec![], 
+                ret: None,
             }, 
             body,
         };
@@ -211,6 +213,7 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
         Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
+            ret: None,
         }))
     }
 
@@ -257,6 +260,7 @@ impl<I> ast::Subprogram<I> for ast::Function<I>
         Ok((rem, ast::Signature{
             name: name.into(), 
             parameters: parameters.unwrap_or(vec![]), 
+            ret: None,
         }))
     }
 
@@ -370,29 +374,37 @@ mod tests {
         }
 
         match root {
-            root @ ast::Knot{ signature: ast::Signature {..}, ..  } => {
+            root @ ast::Knot{ signature: ast::Signature { ret: None, ..}, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_ne!(root.root.body.trim(), "", "Root body parse error");
                 assert_ne!(root.body[0].body.trim(), "", "Root stitch body parse error");
             },
+            _ => {
+                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
+            }
         };
 
         match knots.as_slice() {
             [
-                k1 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
-                k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
+                k1 @ ast::Knot{ signature: ast::Signature { ..}, ..  }, 
+                k2 @ ast::Knot{ signature: ast::Signature { ..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
 
                 assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
 
                 assert_eq!(k2.signature.name, "K2");
+                assert!(matches!(k2.signature.ret, None));
                 assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
 
                 assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert!(matches!(k2.body[0].signature.ret, None));
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
+
             },
             _ => {
                 panic!("Invalid parse.\nFounc {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 2, unparsed);
@@ -412,11 +424,14 @@ mod tests {
         }
 
         match root {
-            root @ ast::Knot{ signature: ast::Signature {..}, ..  } => {
+            root @ ast::Knot{ signature: ast::Signature { ret: None, ..}, ..  } => {
                 assert_eq!(root.signature.name, "__root");
                 assert_eq!(root.root.body.trim(), "", "Root body parse error");
                 assert!(root.body.len() == 0, "Root stitch body parse error");
             },
+            _ => {
+                panic!("Invalid parse. Error with root\nRemaining: \n{:?}\n---", unparsed);
+            }
         };
 
         match knots.as_slice() {
@@ -425,15 +440,19 @@ mod tests {
                 k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
                                                                                           
                 assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
                                                                                           
                 assert_eq!(k2.signature.name, "K2");
+                assert!(matches!(k2.signature.ret, None));
                 assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
                                                                                           
                 assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert!(matches!(k2.body[0].signature.ret, None));
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => {
@@ -467,15 +486,19 @@ mod tests {
                 k2 @ ast::Knot{ signature: ast::Signature {..}, ..  }, 
             ] => {
                 assert_eq!(k1.signature.name, "K1");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.root.body.trim(), "", "K1 body parse error");
                                                                                           
                 assert_eq!(k1.body[0].signature.name, "K1_1", "K1_1 body parse error");
+                assert!(matches!(k1.signature.ret, None));
                 assert_ne!(k1.body[0].body.trim(), "", "K1_1 body parse error");
                                                                                           
                 assert_eq!(k2.signature.name, "K2");
+                assert!(matches!(k2.signature.ret, None));
                 assert_eq!(k2.root.body.trim(), "", "K1 body parse error");
                                                                                           
                 assert_eq!(k2.body[0].signature.name, "K2_1", "K2_1 body parse error");
+                assert!(matches!(k2.body[0].signature.ret, None));
                 assert_ne!(k2.body[0].body.trim(), "", "K2_1 body parse error");
             },
             _ => {
@@ -511,12 +534,12 @@ mod tests {
         let (unparsed, knots) = nom::multi::many1(complete(ast::Knot::parse)).parse(include_str!("../tests/knots_with_parameters.ink"))?;
         match knots.as_slice() {
             [
-                ast::Knot{ signature: ast::Signature { parameters: k1_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Signature { parameters: k2_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Signature { parameters: k3_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Signature { parameters: k4_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Signature { parameters: k5_parameters, ..}, ..}, 
-                ast::Knot{ signature: ast::Signature { parameters: k6_parameters, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k1_parameters, ret: k1_ret, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k2_parameters, ret: k2_ret, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k3_parameters, ret: k3_ret, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k4_parameters, ret: k4_ret, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k5_parameters, ret: k5_ret, ..}, ..}, 
+                ast::Knot{ signature: ast::Signature { parameters: k6_parameters, ret: k6_ret, ..}, ..}, 
             ] => {
                 assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
                 assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
@@ -524,6 +547,13 @@ mod tests {
                 assert!(matches!(k4_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: false, ..}]), "Expected 1 argument by refrence");
                 assert!(matches!(k5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
                 assert!(matches!(k6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
+
+                assert!(matches!(k1_ret, None), "Exptected no return type");
+                assert!(matches!(k2_ret, None), "Exptected no return type");
+                assert!(matches!(k3_ret, None), "Exptected no return type");
+                assert!(matches!(k4_ret, None), "Exptected no return type");
+                assert!(matches!(k5_ret, None), "Exptected no return type");
+                assert!(matches!(k6_ret, None), "Exptected no return type");
             },
             _ => { panic!("Invalid parse.\nFound {} knots, expected {}\nRemaining: \n{:?}\n---", knots.len(), 6, unparsed); }, 
         };
@@ -536,19 +566,28 @@ mod tests {
         let (unparsed, functions) = nom::multi::many1(complete(ast::Function::parse)).parse(include_str!("../tests/functions_with_parameters.ink"))?;
         match functions.as_slice() {
             [
-                ast::Function{ signature: ast::Signature { parameters: k1_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Signature { parameters: k2_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Signature { parameters: k3_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Signature { parameters: k4_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Signature { parameters: k5_parameters, ..}, ..}, 
-                ast::Function{ signature: ast::Signature { parameters: k6_parameters, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f1_parameters, ret: _k1_ret, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f2_parameters, ret: _k2_ret, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f3_parameters, ret: _k3_ret, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f4_parameters, ret: _k4_ret, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f5_parameters, ret: _k5_ret, ..}, ..}, 
+                ast::Function{ signature: ast::Signature { parameters: f6_parameters, ret: _k6_ret, ..}, ..}, 
             ] => {
-                assert!(matches!(k1_parameters.as_slice(), []), "Expected 0 arguments");
-                assert!(matches!(k2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
-                assert!(matches!(k3_parameters.as_slice(), [ast::Parameter{..}, ast::Parameter{..}, ast::Parameter{..}]), "Expected 3 arguments");
-                assert!(matches!(k4_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: false, ..}]), "Expected 1 argument by refrence");
-                assert!(matches!(k5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
-                assert!(matches!(k6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
+                assert!(matches!(f1_parameters.as_slice(), []), "Expected 0 arguments");
+                assert!(matches!(f2_parameters.as_slice(), [ast::Parameter{..}]), "Expected 1 argument");
+                assert!(matches!(f3_parameters.as_slice(), [ast::Parameter{..}, ast::Parameter{..}, ast::Parameter{..}]), "Expected 3 arguments");
+                assert!(matches!(f4_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: false, ..}]), "Expected 1 argument by refrence");
+                assert!(matches!(f5_parameters.as_slice(), [ast::Parameter{refrence:  false, is_divert: true,  ..}]), "Expected 1 divert argument by value");
+                assert!(matches!(f6_parameters.as_slice(), [ast::Parameter{refrence:  true,  is_divert: true,  ..}]), "Expected 1 divert argument by refrence");
+
+                /* TODO:
+                assert!(matches!(f1_ret, None), "Exptected no return type");
+                assert!(matches!(f2_ret, None), "Exptected no return type");
+                assert!(matches!(f3_ret, None), "Exptected no return type");
+                assert!(matches!(f4_ret, None), "Exptected no return type");
+                assert!(matches!(f5_ret, None), "Exptected no return type");
+                assert!(matches!(f6_ret, None), "Exptected no return type");
+                */
             },
             _ => { panic!("Invalid parse.\nFound {} functions, expected {}\nRemaining: \n{:?}\n---", functions.len(), 6, unparsed); }, 
         };
