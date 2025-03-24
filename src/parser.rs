@@ -20,14 +20,11 @@ use nom::{
     bytes::{tag, is_a, take_until,take_till},
     character::{
         anychar,one_of,
-        complete::{
-            space0,
-            alpha1, alphanumeric1,
-            line_ending, not_line_ending,
-        },
+        complete::*,
     },
-    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,verify, complete},
+    combinator::*,
     branch::{alt,},
+    sequence::{delimited,},
 };
 
 use crate::{ast, ast::Subprogram, };
@@ -352,6 +349,115 @@ where
     }).collect();
 
     Ok((rem, param_list))
+}
+
+//Content
+impl<I> ast::Content<I>
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+
+    fn parse(input: I) -> IResult<I, Self>
+    {
+        todo!()
+    }
+
+    fn parse_block(input: I) -> IResult<I, Self>
+    {
+        let mut parser = alt((
+            ast::Alternative::parse,
+            ast::Conditional::parse,
+            ast::Switch::parse,
+            map(ast::Expression::parse, |expr| Self::Evaluation(expr)),
+            Self::parse,
+        ));
+        let (rem, content) = delimited(tag("{"), parser.into(), tag("}")).parse(input)?;
+    }
+}
+
+fn parse_condition_list<T, I, E: nom::error::ParseError<I>, Cmp, Case, Else>(
+    compair: Option<Cmp>, 
+    case: Case, 
+    default: Option<Else>,
+) -> nom::IResult<I, impl ast::ConditionList> 
+where 
+    Cmp:   Parser<I, Output = <ast::ConditionList>::Comparison, Error = E>,
+    Case:  Parser<I, Output = <ast::ConditionList>::Cases, Error = E>, 
+    Else:  Parser<I, Output = <ast::ConditionList>::Default, Error = E>,
+{
+    todo!()
+}
+
+impl<I> ast::Alternative<I> { 
+    fn parse(input: I) -> IResult<I, Self> { 
+        let alternate_type = (
+            alt(( 
+                 tag("stopping"), tag("once"), tag("cycle"), 
+                (tag("shuffle"), opt(
+                    alt((
+                        tag("stopping"), space1, tag("once"), 
+                    ))
+                ))
+            )),
+            space0, tag(":")
+        );
+        let block  = parse_condition_list(
+            ast::Content::parse, 
+            Some(alternate_type),
+            tag("-"),
+            None
+        );
+    
+        let inline = parse_condition_list(
+            ast::Content::parse_block,
+            Some(opt(one_of("!&~"))), 
+            tag("|"), 
+            Some(opt)
+        );
+
+        inline.or(block).parse(input)?
+    }
+} 
+
+impl<I> ast::Conditional<I> { 
+    fn parse(input: I) -> IResult<I, Self> { 
+        let block  = parse_condition_list(
+            ast::Content::parse,
+            None,
+            (tag("-"), space0, ast::Expression::parse, space0, tag(":")),
+            opt((tag("-"), space0, tag("else"), space0, tag(":"))),
+        );
+    
+        let inline = parse_condition_list(
+            ast::Content::parse_block, 
+            Some(ast::Expression::parse, space0, tag(":")),
+            success(todo!()),
+            (tag("|"), space0, ast::Expression::parse) 
+        );
+
+        inline.or(block).parse(input)
+    }
+} 
+
+impl<I> ast::Switch<I> { 
+    fn parse(input: I) -> IResult<I, Self> { 
+        parse_condition_list::<ast::Content::parse>(
+            Some(ast::Expression::parse, space0, tag(":")),
+            (tag("-"), space0, ast::Expression::parse, space0, tag(":")),
+            opt((tag("-"), space0, tag("else"), space0, tag(":"))),
+        )
+    }
+} 
+
+impl ast::Expression
+{
+    fn parse<I>(input: I) -> IResult<I, Self>  where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { todo!() }
 }
 
 #[cfg(test)]
