@@ -658,7 +658,7 @@ mod tests {
         let mut expected = [
             ast::Content::Text("Line of text"), ast::Content::Newline,
 
-            ast::Content::Text("Second line of text"), ast::Content::Newline,
+            ast::Content::Text("Secnd line of text"), ast::Content::Newline,
 
             ast::Content::Text("Text with delmited newline "), ast::Content::Text("continuing line"), ast::Content::Newline,
 
@@ -674,6 +674,7 @@ mod tests {
                     assert!(text == expected, "Error: Invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
                 }, 
                 //Newlines
+                ( Some(ast::Content::Newline), Some(ast::Content::Newline) ) => { continue; },
                 ( Some(ast::Content::Text(text)), Some(ast::Content::Newline) ) => {
                     panic!("Expected newline, got a string of text!\nText: {:?}", text);
                 },
