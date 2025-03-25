@@ -687,6 +687,15 @@ mod tests {
                 ( None, Some(ast::Content::Newline) ) => {
                     panic!("Expected newline but text left unparsed!\nUnparsed text: {:?}", unparsed);
                 },
+
+                ( Some(ast::Content::Text(text)), None ) => {
+                    panic!("Expected end of input but found text!\nParsed text: {:?}\nUnparsed text: {:?}", text, unparsed);
+                },
+                ( Some(ast::Content::Newline), None ) => {
+                    panic!("Expected newline but found newline!\nUnparsed text: {:?}", unparsed);
+                },
+
+                //End of input
                 ( None, None ) => { break; },
                 _ => {
                     panic!("Invalid parse!\nRemaining text: {:?}", unparsed);
