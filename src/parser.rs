@@ -375,14 +375,17 @@ impl<I> ast::Content<I>
             let (input, text_length) = peek(fold_many1(
                 alt((
                     verify(is_not("\\\n{}"), |fragment: &I| fragment.input_len() > 0), //Literal
-                    recognize(preceded(char('\\'), multispace1)), //Escaped whitespace
-                    recognize(preceded(char('\\'), anychar)), //Escaped char
+                    recognize(preceded(char('\\'), is_not("\r\n"))), //Escaped char
                 )),
                 ||0usize,
                 |text_length, fragment: I| text_length + fragment.input_len() 
             )).parse(input)?;
 
             let (rem, text) = input.take_split(text_length);
+            
+            //Escaped whitespace
+            let (rem, _) = opt(recognize(preceded(char('\\'), multispace1))).parse(rem)?;
+
             Ok( (rem, Self::Text(text)) )
         }
     }
@@ -658,7 +661,7 @@ mod tests {
         let mut expected = [
             ast::Content::Text("Line of text"), ast::Content::Newline,
 
-            ast::Content::Text("Secnd line of text"), ast::Content::Newline,
+            ast::Content::Text("\tSecond line of text"), ast::Content::Newline,
 
             ast::Content::Text("Text with delmited newline "), ast::Content::Text("continuing line"), ast::Content::Newline,
 
