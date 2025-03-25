@@ -88,6 +88,7 @@ pub enum Target {
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub enum Branch {
     Divert(Identifier), // -> <Signature>
     Tunnel(Identifier), // -> <Signature> -> Divert | Tunnel
@@ -118,6 +119,7 @@ pub struct Parameter {
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub struct Alternative<I> { 
     cases: HashMap<usize, Vec<Content<I>>>,
 
@@ -126,15 +128,18 @@ pub struct Alternative<I> {
 
 }
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub enum AlternateType { Once, Cycle, Stopping, }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub struct Conditional<I> {
     cases: Vec<(Expression, Vec<Content<I>>)>,
     default: Option<Vec<Content<I>>>,
 }                                                 
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub struct Switch<I> {                            
     comparision: Expression,                      
     cases: Vec<(Expression, Vec<Content<I>>)>,
@@ -142,6 +147,7 @@ pub struct Switch<I> {
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub enum Content<I> {
     Logic(Expression),
     Evaluation(Expression),
@@ -150,9 +156,11 @@ pub enum Content<I> {
     Switch(Switch<I>),
     Branch(Branch),
     Text(I),
+    Newline,
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub enum Expression  {
     Literal(Value),
     Variable,
@@ -162,6 +170,7 @@ pub enum Expression  {
 }
 
 #[allow(dead_code)]
+#[derive(Debug,)]
 pub enum Operation {
     ///Logical:
     And,

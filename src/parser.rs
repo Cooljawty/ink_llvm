@@ -1,5 +1,3 @@
-use nom::IResult;
-
 macro_rules! print_nom_input {
     ( $($input:expr),* ) => {
         $(
@@ -14,20 +12,18 @@ macro_rules! print_nom_input {
 
 #[allow(unused_imports)]
 use nom::{
+    IResult,
     AsChar,
     Parser,
-    multi::{many0, many_till, fold_many0,separated_list0,many1},
-    bytes::{tag, is_a, take_until,take_till},
+    multi::*,
+    bytes::{tag, is_a, is_not, take_until,take_till},
     character::{
         anychar,one_of,
-        complete::{
-            space0,
-            alpha1, alphanumeric1,
-            line_ending, not_line_ending,
-        },
+        complete::*,
     },
-    combinator::{value, opt, eof, not, peek, recognize,success,all_consuming,flat_map,verify, complete},
+    combinator::*,
     branch::{alt,},
+    sequence::{delimited, preceded,},
 };
 
 use crate::{ast, ast::Subprogram, };
@@ -354,6 +350,57 @@ where
     Ok((rem, param_list))
 }
 
+//Content
+impl<I> ast::Content<I>
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+
+    #[allow(dead_code)]
+    fn parse(input: I) -> IResult<I, Self>
+    {
+        /* TODO
+        if let (rem, expr) = ((space0, tag("~"), space0), ast::Expression::parse).parse(input)
+        {
+        }
+        else if let (rem, branch) = ast::Branch::parse(input) 
+        {
+        }
+        */
+        if let Ok((rem, _newline)) = many1(line_ending::<I, nom::error::Error<I>>).parse(input.clone()) { Ok( (rem, ast::Content::Newline) ) }
+        else
+        {
+            let (input, text_length) = peek(fold_many1(
+                alt((
+                    verify(is_not("\\\n{}"), |fragment: &I| fragment.input_len() > 0), //Literal
+                    recognize(preceded(char('\\'), multispace1)), //Escaped whitespace
+                    recognize(preceded(char('\\'), anychar)), //Escaped char
+                )),
+                ||0usize,
+                |text_length, fragment: I| text_length + fragment.input_len() 
+            )).parse(input)?;
+
+            let (rem, text) = input.take_split(text_length);
+            Ok( (rem, Self::Text(text)) )
+        }
+    }
+
+    /*TODO:
+    fn parse_block(input: I) -> IResult<I, Self>
+    {
+        let mut parser = alt((
+            //TODO: ast::Alternative::parse,
+            //TODO: ast::Conditional::parse,
+            //TODO: ast::Switch::parse,
+            //TODO: map(ast::Expression::parse, |expr| Self::Evaluation(expr)),
+            Self::parse,
+        ));
+        let (rem, content) = delimited(tag("{"), parser.into(), tag("}")).parse(input)?;
+    }
+    */
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -599,6 +646,53 @@ mod tests {
         let (res, id) = identifier("a_var_w_1_number;")?; assert_eq!((";", "a_var_w_1_number"), (res, id.as_str()));
 
         if let Ok((res, id)) = identifier("1var_w_num;") { panic!("Invalid parse! Should of returned error.\nresult: ('{}','{}')", res, id); }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_content() -> Result<(), Box<dyn std::error::Error>> {
+        let (unparsed, content) = nom::multi::many1(complete(ast::Content::parse)).parse(include_str!("../tests/content.ink"))?;
+        let mut content = content.into_iter();
+
+        let mut expected = [
+            ast::Content::Text("Line of text"), ast::Content::Newline,
+
+            ast::Content::Text("Second line of text"), ast::Content::Newline,
+
+            ast::Content::Text("Text with delmited newline "), ast::Content::Text("continuing line"), ast::Content::Newline,
+
+            ast::Content::Text("Text with delemiter \\{ block \\}"), ast::Content::Newline,
+        //TODO: "Text with condition " /*{cond: True!}*/ "."
+        //TODO: "Text with " /*{& cycling|repeating|alternating}*/" content"
+        ].into_iter();
+
+        loop {
+            match (content.next(), expected.next()) { 
+                //Text matching
+                ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
+                    assert!(text == expected, "Error: Invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
+                }, 
+                //Newlines
+                ( Some(ast::Content::Text(text)), Some(ast::Content::Newline) ) => {
+                    panic!("Expected newline, got a string of text!\nText: {:?}", text);
+                },
+                ( Some(ast::Content::Newline), Some(ast::Content::Text(expected)) ) => {
+                    panic!("Expected text but got a new lines!\nExpected text: {:?}", expected);
+                },
+
+                ( None, Some(ast::Content::Text(expected)) ) => {
+                    panic!("Expected text but text left unparsed!\nExpected text: {:?}\nUnparsed text: {:?}", expected, unparsed);
+                },
+                ( None, Some(ast::Content::Newline) ) => {
+                    panic!("Expected newline but text left unparsed!\nUnparsed text: {:?}", unparsed);
+                },
+                ( None, None ) => { break; },
+                _ => {
+                    panic!("Invalid parse!\nRemaining text: {:?}", unparsed);
+                } 
+            }
+        }
 
         Ok(())
     }
