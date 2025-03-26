@@ -426,6 +426,8 @@ impl<I> Parse<I> for ast::Alternative<I> where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
+        println!("Parseing Alternative");
+        print_nom_input!(input);
         /*
         let (rem, ((method, shuffle), _, cases)) = (
             alt(( 
@@ -436,34 +438,41 @@ impl<I> Parse<I> for ast::Alternative<I> where
                 value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
                 value((ast::AlternateType::Cycle, true),     tag("shuffle"))
             )),
-            recognize((space0, tag(":"))),
+            recognize((space0, tag(":"), space0)),
 
             //TODO: Should sperate by lines starting with '-' not by new lines
-            separated_list1(
-                (line_ending, space0, tag("-")), 
+            many1(
+                map(
+                    (
+                        (line_ending, space0, tag("-")), 
+                        fold_many0(
+                            alt(( 
+                                //Inline Content
+                                map_parser(
+                                    recognize(
+                                        many1(
+                                            peek(not(( line_ending, space0, tag("-") )))
+                                            .and(is_not("{}"))
+                                        )
+                                    ), 
+                                    many0(complete(ast::Content::parse)),
+                                ),
+                                //Block Content
+                                map(
+                                    ast::Content::parse_block,
+                                    |block|{ vec![block] },
+                                ),
+                            )),
 
-                map_parser(
-                    not_line_ending,
-                    all_consuming(many0(ast::Content::parse))
+                            Vec::<ast::Content<I>>::new,
+                            |mut acc, content|{acc.extend(content); acc},
+                        ),
+                    ),
+                    |(_start, content)|{ content },
                 )
             ),
-            /*
-            fold_many1(
-                ((tag("-"), space0), many0(ast::Content::parse)),
-                ||{
-                    println!("Is block");
-                    (0usize, HashMap::<usize, Vec<ast::Content<I>>>::new())
-                },
-                |(count, mut cases), (_, content)|{
-                    if !content.is_empty() { cases.insert(count, content); };
-                    (count+1, cases)
-                }
-            ),
-            */
         ).or( (
         */
-        println!("Parseing Alternative");
-        print_nom_input!(input);
         let (rem, ((method, shuffle), _, cases)) = (
             alt(( 
                 value((ast::AlternateType::Stopping, false), tag("!")),
@@ -886,6 +895,7 @@ mod tests {
                                 (1, vec![]),
                             ])
                         }),
+                        ast::Content::Text(" content"),
                     ]),
                     (2, vec![ast::Content::Text("alternating")]),
                 ])
@@ -903,12 +913,40 @@ mod tests {
         ].into_iter();
 
 
-        loop {
-            match (content.next(), expected.next()) { 
+        fn matches<'test>(content: Option<&'test ast::Content<&'test str>>, expected: Option<&'test ast::Content<&'test str>>, unparsed: &'test str) -> bool {
+            match (content, expected) { 
                 //Text matching
                 ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
-                    assert!(text == expected, "Invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
+                    assert!(text == expected, "ivalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
                 }, 
+                
+                (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
+                => {
+                    assert!(content.len() == expected.len(), "Diffrent number of cases!\nExpected: {:?}\nParsed:   {:?}", content_block, expected_block);
+
+                    for i in expected.keys() {
+                        let mut content  = content.get(&i).unwrap().iter();
+                        let mut expected = expected.get(&i).unwrap().iter();
+
+                        while matches( content.next(), expected.next(), unparsed) {};
+                    }
+                },
+
+                /*TODO:
+                (Some(ast::Content::Conditional(ast::Conditional{cases: content, ..})), Some(ast::Content::Conditional(ast::Conditional{cases: expected, ..})))
+                => {
+                    for (content, expected) in content.iter().zip(expected.iter()) {
+                        matches(content.1, expected.1);
+                    }
+                },
+                (Some(ast::Content::Switch(ast::Switch{cases: content, ..})),      Some(ast::Content::Switch(ast::Switch{cases: expected, ..}))     )
+                => {
+                    for (content, expected) in content.iter().zip(expected.iter()) {
+                        matches(content.1, expected.1);
+                    }
+                },
+                */
+
                 ( Some(content), Some(expected) ) => match (content, expected) {
                       (ast::Content::Logic(_),       ast::Content::Logic(_)      )
                     | (ast::Content::Evaluation(_),  ast::Content::Evaluation(_) )
@@ -928,9 +966,13 @@ mod tests {
                 ( Some(content), None ) => {
                     panic!("Expected end of input but found content!\nParsed content: {:?}\nUnparsed text:  {:?}", content, unparsed);
                 },
-                ( None, None ) => { break; },
-            }
+                ( None, None ) => { return false; },
+            };
+            
+            true
         }
+
+        while matches( (&content.next()).into(), (&expected.next()).into(), &unparsed) {};
 
         Ok(())
     }
