@@ -462,7 +462,8 @@ impl<I> Parse<I> for ast::Alternative<I> where
             */
         ).or( (
         */
-        //print_nom_input!(input);
+        println!("Parseing Alternative");
+        print_nom_input!(input);
         let (rem, ((method, shuffle), _, cases)) = (
             alt(( 
                 value((ast::AlternateType::Stopping, false), tag("!")),
@@ -475,20 +476,32 @@ impl<I> Parse<I> for ast::Alternative<I> where
             separated_list1(
                 tag("|"),
 
-                map_parser(
-                    is_not("|}"),
-                    many0(complete(alt((ast::Content::parse, ast::Content::parse_block)))),
-                )
+                fold_many0(
+                    alt(( 
+                        map_parser(
+                            is_not("|{}"), 
+                            many0(complete(ast::Content::parse)),
+                        ),
+                        map(
+                            ast::Content::parse_block,
+                            |block|{ vec![block] },
+                        ),
+                    )),
+                    Vec::<ast::Content<I>>::new,
+                    |mut acc, content|{acc.extend(content); acc},
+                ),
             ),
         ).parse(input)?;
     
         let cases = HashMap::from_iter(
             cases.into_iter()
-                .enumerate() //NOTE: Make sure to enumerate *and then* filter to preserve blank alternates
+                .enumerate() //NOTE: enumerate *and then* filter to preserve blank alternates
                 .filter(|(_index, cases)|!cases.is_empty())
         );
-        //print_nom_input!(rem);
-        //println!("End alternative");
+
+        print_nom_input!(rem);
+        println!("End alternative");
+
         Ok((rem, ast::Alternative{ cases, method, shuffle }))
     }
 } 
@@ -855,6 +868,25 @@ mod tests {
                 cases: HashMap::from([
                     (0, vec![ast::Content::Text("cycling")]),
                     (1, vec![ast::Content::Text("repeating")]),
+                    (2, vec![ast::Content::Text("alternating")]),
+                ])
+            }),
+            ast::Content::Text(" content"), ast::Content::Newline,
+
+            ast::Content::Text("Text with "), 
+            ast::Content::Alternative(ast::Alternative{
+                method: ast::AlternateType::Cycle, shuffle: false,
+                cases: HashMap::from([
+                    (0, vec![ast::Content::Text("cycling")]),
+                    (1, vec![
+                        ast::Content::Alternative(ast::Alternative{
+                            method: ast::AlternateType::Cycle, shuffle: true,
+                            cases: HashMap::from([
+                                (0, vec![ast::Content::Text("random!")]),
+                                (1, vec![]),
+                            ])
+                        }),
+                    ]),
                     (2, vec![ast::Content::Text("alternating")]),
                 ])
             }),
