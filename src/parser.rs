@@ -428,8 +428,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
     fn parse(input: I) -> IResult<I, Self> { 
         println!("Parseing Alternative");
         print_nom_input!(input);
-        /*
-        let (rem, ((method, shuffle), _, cases)) = (
+        let (rem, ((method, shuffle), _, cases, _)) = (
             alt(( 
                 value((ast::AlternateType::Stopping, false), tag("stopping")),
                 value((ast::AlternateType::Once, false),     tag("once")),
@@ -440,27 +439,25 @@ impl<I> Parse<I> for ast::Alternative<I> where
             )),
             recognize((space0, tag(":"), space0)),
 
-            //TODO: Should sperate by lines starting with '-' not by new lines
             many1(
                 map(
                     (
-                        (line_ending, space0, tag("-")), 
+                        map((line_ending, space0, tag("-"), space0), |x|{println!("New case!"); x}), 
                         fold_many0(
                             alt(( 
                                 //Inline Content
                                 map_parser(
-                                    recognize(
-                                        many1(
-                                            peek(not(( line_ending, space0, tag("-") )))
-                                            .and(is_not("{}"))
-                                        )
-                                    ), 
+                                    map( recognize( many1(
+                                            peek(not(( line_ending, space0, tag("-"))))
+                                            .and(is_not("\n{}"))
+                                        )), 
+                                    |inner_content: I|{print_nom_input!(inner_content); inner_content},),
+
                                     many0(complete(ast::Content::parse)),
                                 ),
                                 //Block Content
-                                map(
-                                    ast::Content::parse_block,
-                                    |block|{ vec![block] },
+                                map( ast::Content::parse_block,
+                                    |block|{println!("inner_content:\t\tParsed block"); vec![block] },
                                 ),
                             )),
 
@@ -469,11 +466,10 @@ impl<I> Parse<I> for ast::Alternative<I> where
                         ),
                     ),
                     |(_start, content)|{ content },
-                )
+                ),
             ),
+            multispace0
         ).or( (
-        */
-        let (rem, ((method, shuffle), _, cases)) = (
             alt(( 
                 value((ast::AlternateType::Stopping, false), tag("!")),
                 value((ast::AlternateType::Cycle, false),    tag("&")), 
@@ -500,7 +496,8 @@ impl<I> Parse<I> for ast::Alternative<I> where
                     |mut acc, content|{acc.extend(content); acc},
                 ),
             ),
-        ).parse(input)?;
+            space0
+            ) ).parse(input)?;
     
         let cases = HashMap::from_iter(
             cases.into_iter()
@@ -888,6 +885,7 @@ mod tests {
                 cases: HashMap::from([
                     (0, vec![ast::Content::Text("cycling")]),
                     (1, vec![
+                        ast::Content::Text("nested "),
                         ast::Content::Alternative(ast::Alternative{
                             method: ast::AlternateType::Cycle, shuffle: true,
                             cases: HashMap::from([
@@ -922,7 +920,7 @@ mod tests {
                 
                 (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
                 => {
-                    assert!(content.len() == expected.len(), "Diffrent number of cases!\nExpected: {:?}\nParsed:   {:?}", content_block, expected_block);
+                    assert!(content.len() == expected.len(), "Diffrent number of cases!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block);
 
                     for i in expected.keys() {
                         let mut content  = content.get(&i).unwrap().iter();
@@ -957,7 +955,7 @@ mod tests {
                     | (ast::Content::Text(_),        ast::Content::Text(_)       )
                     | (ast::Content::Newline,        ast::Content::Newline       ) => {},
 
-                    (content, expected) => {panic!("Content parsed incorrectly!\nExpected content: {:?}\nParsed content:   {:?}", expected, content) },
+                    (content, expected) => {panic!("Content parsed incorrectly!\nParsed content:   {:?}\nExpected content: {:?}", content, expected) },
                 }
 
                 ( None, Some(expected) ) => {

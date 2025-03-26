@@ -7,4 +7,9 @@ continuing line
 Text with delemiter \{ block \}
 
 Text with {& cycling|repeating|alternating} content
+Text with {cycle:
+	- cycling
+	- nested {~ random!|} content
+	- alternating
+} content
 Text with condition {cond: True!}.
