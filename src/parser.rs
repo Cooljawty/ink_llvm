@@ -479,7 +479,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
             space0,
 
             separated_list1(
-                tag("|"),
+                tag("|"), 
 
                 fold_many0(
                     alt(( 
@@ -500,9 +500,9 @@ impl<I> Parse<I> for ast::Alternative<I> where
             ) ).parse(input)?;
     
         let cases = HashMap::from_iter(
-            cases.into_iter()
-                .enumerate() //NOTE: enumerate *and then* filter to preserve blank alternates
-                .filter(|(_index, cases)|!cases.is_empty())
+            cases.into_iter().enumerate()
+                //TODO: Represent {..||..} as None or empty vec
+                //.filter(|(_index, cases)|!cases.is_empty())
         );
 
         print_nom_input!(rem);
