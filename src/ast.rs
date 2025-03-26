@@ -11,7 +11,8 @@ pub struct Signature {
     pub(crate) ret: Option<Value>,
 }
 
-pub trait Subprogram<I> where 
+pub trait Subprogram<I>
+where 
     for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>
@@ -121,29 +122,29 @@ pub struct Parameter {
 #[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Alternative<I> { 
-    cases: HashMap<usize, Vec<Content<I>>>,
+    pub(crate) cases: HashMap<usize, Vec<Content<I>>>,
 
-    method: AlternateType,
-    shuffle: bool,
-
+    pub(crate) method: AlternateType,
+    pub(crate) shuffle: bool,
 }
+
 #[allow(dead_code)]
-#[derive(Debug,)]
+#[derive(Clone, Debug,)]
 pub enum AlternateType { Once, Cycle, Stopping, }
 
 #[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Conditional<I> {
-    cases: Vec<(Expression, Vec<Content<I>>)>,
-    default: Option<Vec<Content<I>>>,
+    pub(crate) cases: Vec<(Expression, Vec<Content<I>>)>,
+    pub(crate) default: Option<Vec<Content<I>>>,
 }                                                 
 
 #[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Switch<I> {                            
-    comparision: Expression,                      
-    cases: Vec<(Expression, Vec<Content<I>>)>,
-    default: Option<Vec<Content<I>>>,
+    pub(crate) comparision: Expression,                      
+    pub(crate) cases: Vec<(Expression, Vec<Content<I>>)>,
+    pub(crate) default: Option<Vec<Content<I>>>,
 }
 
 #[allow(dead_code)]

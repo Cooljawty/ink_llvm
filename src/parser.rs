@@ -10,6 +10,8 @@ macro_rules! print_nom_input {
     }
 }
 
+use std::collections::HashMap;
+
 #[allow(unused_imports)]
 use nom::{
     IResult,
@@ -28,7 +30,17 @@ use nom::{
 
 use crate::{ast, ast::Subprogram, };
 
-impl<I> ast::Story<I> where
+pub trait Parse<I> 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>
+{
+    fn parse(input: I) -> nom::IResult<I, Self> where Self: Sized { fail().parse(input) }
+}
+
+impl<I> ast::Story<I> 
+where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
@@ -123,11 +135,11 @@ impl<I> ast::Story<I> where
 }
 
 //Knots and Stitches
-impl<I> ast::Subprogram<I> for ast::Knot<I>
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+impl<I> ast::Subprogram<I> for ast::Knot<I> 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
     fn parse(input: I) -> IResult<I, ast::Knot<I>> 
     {   
@@ -206,10 +218,10 @@ impl<I> ast::Subprogram<I> for ast::Knot<I>
 }
 
 impl<I> ast::Subprogram<I> for ast::Stitch<I> 
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
     fn parse(input: I) -> IResult<I, ast::Stitch<I>>
     {   
@@ -250,11 +262,11 @@ impl<I> ast::Subprogram<I> for ast::Stitch<I>
 }
 
 //Functions
-impl<I> ast::Subprogram<I> for ast::Function<I>
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+impl<I> ast::Subprogram<I> for ast::Function<I> 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
     fn parse(input: I) -> IResult<I, ast::Function<I>>
     {   
@@ -352,10 +364,10 @@ where
 
 //Content
 impl<I> ast::Content<I>
-    where
-        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-        <I as nom::Input>::Item: nom::AsChar,
-        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
 
     #[allow(dead_code)]
@@ -369,15 +381,16 @@ impl<I> ast::Content<I>
         {
         }
         */
-        if let Ok((rem, _newline)) = many1(line_ending::<I, nom::error::Error<I>>).parse(input.clone()) { Ok( (rem, ast::Content::Newline) ) }
+        if      let Ok((rem, _block)) = peek(char::<I, nom::error::Error<I>>('{')).parse(input.clone()) { Self::parse_block(rem) }
+        else if let Ok((rem, _newline)) = many1(line_ending::<I, nom::error::Error<I>>).parse(input.clone()) { Ok( (rem, ast::Content::Newline) ) }
         else
         {
             let (input, text_length) = peek(fold_many1(
                 alt((
-                    verify(is_not("\\\n{}"), |fragment: &I| fragment.input_len() > 0), //Literal
-                    recognize(preceded(char('\\'), is_not("\r\n"))), //Escaped char
+                    complete(verify(is_not("\\\n{}"), |fragment: &I|fragment.input_len() > 0)), //Literal
+                    complete(recognize(preceded(char('\\'), is_not("\r\n")))), //Escaped char
                 )),
-                ||0usize,
+                || 0usize,
                 |text_length, fragment: I| text_length + fragment.input_len() 
             )).parse(input)?;
 
@@ -390,23 +403,190 @@ impl<I> ast::Content<I>
         }
     }
 
-    /*TODO:
+    #[allow(dead_code)]
     fn parse_block(input: I) -> IResult<I, Self>
     {
-        let mut parser = alt((
-            //TODO: ast::Alternative::parse,
-            //TODO: ast::Conditional::parse,
-            //TODO: ast::Switch::parse,
-            //TODO: map(ast::Expression::parse, |expr| Self::Evaluation(expr)),
-            Self::parse,
-        ));
-        let (rem, content) = delimited(tag("{"), parser.into(), tag("}")).parse(input)?;
+        let (rem, block) = delimited(
+            tag("{"), 
+            alt((
+                map(ast::Alternative::parse, |alternative| Self::Alternative(alternative)),
+                //TODO: map(ast::Conditional::parse, |conditional| Self::Conditional(conditional)),
+                //TODO: map(ast::Switch::parse,      |switch| Self::Switch(switch)),
+                //TODO: map(ast::Expression::parse,  |expr| Self::Evaluation(expr)),
+            )),
+            tag("}")
+        ).parse(input)?;
+        Ok((rem, block))
     }
-    */
 }
+
+impl<I> Parse<I> for ast::Alternative<I> where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    fn parse(input: I) -> IResult<I, Self> { 
+        /*
+        let (rem, ((method, shuffle), _, cases)) = (
+            alt(( 
+                value((ast::AlternateType::Stopping, false), tag("stopping")),
+                value((ast::AlternateType::Once, false),     tag("once")),
+                value((ast::AlternateType::Cycle, false),    tag("cycle")), 
+                value((ast::AlternateType::Stopping, true),  (tag("shuffle"), space0, tag("stopping"))),
+                value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
+                value((ast::AlternateType::Cycle, true),     tag("shuffle"))
+            )),
+            recognize((space0, tag(":"))),
+
+            //TODO: Should sperate by lines starting with '-' not by new lines
+            separated_list1(
+                (line_ending, space0, tag("-")), 
+
+                map_parser(
+                    not_line_ending,
+                    all_consuming(many0(ast::Content::parse))
+                )
+            ),
+            /*
+            fold_many1(
+                ((tag("-"), space0), many0(ast::Content::parse)),
+                ||{
+                    println!("Is block");
+                    (0usize, HashMap::<usize, Vec<ast::Content<I>>>::new())
+                },
+                |(count, mut cases), (_, content)|{
+                    if !content.is_empty() { cases.insert(count, content); };
+                    (count+1, cases)
+                }
+            ),
+            */
+        ).or( (
+        */
+        //print_nom_input!(input);
+        let (rem, ((method, shuffle), _, cases)) = (
+            alt(( 
+                value((ast::AlternateType::Stopping, false), tag("!")),
+                value((ast::AlternateType::Cycle, false),    tag("&")), 
+                value((ast::AlternateType::Cycle, true),     tag("~")),
+                success((ast::AlternateType::Once, false)),
+            )),
+            space0,
+
+            separated_list1(
+                tag("|"),
+
+                map_parser(
+                    is_not("|}"),
+                    many0(complete(alt((ast::Content::parse, ast::Content::parse_block)))),
+                )
+            ),
+        ).parse(input)?;
+    
+        let cases = HashMap::from_iter(
+            cases.into_iter()
+                .enumerate() //NOTE: Make sure to enumerate *and then* filter to preserve blank alternates
+                .filter(|(_index, cases)|!cases.is_empty())
+        );
+        //print_nom_input!(rem);
+        //println!("End alternative");
+        Ok((rem, ast::Alternative{ cases, method, shuffle }))
+    }
+} 
+
+/*
+impl<I> Parse<I> for ast::Conditional<I> where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    fn parse(input: I) -> IResult<I, Self> { 
+        /*
+        let block  = parse_condition_list::<ast::Content::parse>(
+            None,
+            map((tag("-"), space0, ast::Expression::parse, space0, tag(":")), |(_, _, expr _, _)| expr),
+            Some((tag("-"), space0, tag("else"), space0, tag(":"), space0)),
+        );
+    
+        let mut called = false;
+        let inline = parse_condition_list::<ast::Content::parse_block>( 
+            Some(ast::Expression::parse, space0, tag(":")),
+            ||{ if !called { called = true; success} else { fail }},
+            Some((tag("|"), space0)),
+        );
+
+        let (rem, commpair) = match default { 
+            Some(parser) => {
+                let (rem, p) = parser.parse(input)?;
+                (rem, Some(p))
+            },
+            None => (input, None),
+        };
+        let (rem, cases) = many0(case.and_then(T::parse)).parse(rem)?;
+        let (rem, default) = match default { 
+            Some(parser) => {
+                let (rem, p) = parser.parse(rem)?;
+                let (rem, q) = T::parse(rem)?;
+                (rem, Some((p, q)))
+            },
+            None => (rem, None),
+        };
+
+        if let Some(cond) = cond {
+            cases = vec![(todo!(), cases[0])]
+        }
+        Ok(ast::Conditional{ cases, default, })
+        */
+    }
+} 
+
+
+impl<I> Parse<I> for ast::Switch<I> 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    fn parse(input: I) -> IResult<I, Self> { 
+        parse_condition_list::<ast::Content::parse>(
+            Some(ast::Expression::parse, space0, tag(":")),
+            (tag("-"), space0, ast::Expression::parse, space0, tag(":")),
+            opt((tag("-"), space0, tag("else"), space0, tag(":"))),
+        );
+
+        let (rem, commpair) = match default { 
+            Some(parser) => {
+                let (rem, p) = parser.parse(input)?;
+                (rem, Some(p))
+            },
+            None => (input, None),
+        };
+        let (rem, cases) = many0(case.and_then(T::parse)).parse(rem)?;
+        let (rem, default) = match default { 
+            Some(parser) => {
+                let (rem, p) = parser.parse(rem)?;
+                let (rem, q) = T::parse(rem)?;
+                (rem, Some((p, q)))
+            },
+            None => (rem, None),
+        };
+    }
+} 
+*/
+
+impl<I> Parse<I> for ast::Expression 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    fn parse(_input: I) -> IResult<I, Self>  
+    { todo!() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use nom::Input;
 
     #[test]
@@ -656,6 +836,8 @@ mod tests {
     #[test]
     fn parse_content() -> Result<(), Box<dyn std::error::Error>> {
         let (unparsed, content) = nom::multi::many1(complete(ast::Content::parse)).parse(include_str!("../tests/content.ink"))?;
+
+        println!("Parsed: {:#?}", content);
         let mut content = content.into_iter();
 
         let mut expected = [
@@ -666,44 +848,55 @@ mod tests {
             ast::Content::Text("Text with delmited newline "), ast::Content::Text("continuing line"), ast::Content::Newline,
 
             ast::Content::Text("Text with delemiter \\{ block \\}"), ast::Content::Newline,
-        //TODO: "Text with condition " /*{cond: True!}*/ "."
-        //TODO: "Text with " /*{& cycling|repeating|alternating}*/" content"
+            
+            ast::Content::Text("Text with "), 
+            ast::Content::Alternative(ast::Alternative{
+                method: ast::AlternateType::Cycle, shuffle: false,
+                cases: HashMap::from([
+                    (0, vec![ast::Content::Text("cycling")]),
+                    (1, vec![ast::Content::Text("repeating")]),
+                    (2, vec![ast::Content::Text("alternating")]),
+                ])
+            }),
+            ast::Content::Text(" content"), ast::Content::Newline,
+
+            ast::Content::Text("Text with condition "),
+            ast::Content::Conditional(ast::Conditional{
+                cases: vec![
+                    (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
+                ],
+                default: None,
+            }),
+            ast::Content::Text("."),
         ].into_iter();
+
 
         loop {
             match (content.next(), expected.next()) { 
                 //Text matching
                 ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
-                    assert!(text == expected, "Error: Invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
+                    assert!(text == expected, "Invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
                 }, 
-                //Newlines
-                ( Some(ast::Content::Newline), Some(ast::Content::Newline) ) => { continue; },
-                ( Some(ast::Content::Text(text)), Some(ast::Content::Newline) ) => {
-                    panic!("Expected newline, got a string of text!\nText: {:?}", text);
-                },
-                ( Some(ast::Content::Newline), Some(ast::Content::Text(expected)) ) => {
-                    panic!("Expected text but got a new lines!\nExpected text: {:?}", expected);
-                },
+                ( Some(content), Some(expected) ) => match (content, expected) {
+                      (ast::Content::Logic(_),       ast::Content::Logic(_)      )
+                    | (ast::Content::Evaluation(_),  ast::Content::Evaluation(_) )
+                    | (ast::Content::Alternative(_), ast::Content::Alternative(_))
+                    | (ast::Content::Conditional(_), ast::Content::Conditional(_))
+                    | (ast::Content::Switch(_),      ast::Content::Switch(_)     )
+                    | (ast::Content::Branch(_),      ast::Content::Branch(_)     )
+                    | (ast::Content::Text(_),        ast::Content::Text(_)       )
+                    | (ast::Content::Newline,        ast::Content::Newline       ) => {},
 
-                ( None, Some(ast::Content::Text(expected)) ) => {
-                    panic!("Expected text but text left unparsed!\nExpected text: {:?}\nUnparsed text: {:?}", expected, unparsed);
-                },
-                ( None, Some(ast::Content::Newline) ) => {
-                    panic!("Expected newline but text left unparsed!\nUnparsed text: {:?}", unparsed);
-                },
+                    (content, expected) => {panic!("Content parsed incorrectly!\nExpected content: {:?}\nParsed content:   {:?}", expected, content) },
+                }
 
-                ( Some(ast::Content::Text(text)), None ) => {
-                    panic!("Expected end of input but found text!\nParsed text: {:?}\nUnparsed text: {:?}", text, unparsed);
+                ( None, Some(expected) ) => {
+                    panic!("Expected content but input left unparsed!\nExpected content: {:?}\nUnparsed input:   {:?}", expected, unparsed);
                 },
-                ( Some(ast::Content::Newline), None ) => {
-                    panic!("Expected newline but found newline!\nUnparsed text: {:?}", unparsed);
+                ( Some(content), None ) => {
+                    panic!("Expected end of input but found content!\nParsed content: {:?}\nUnparsed text:  {:?}", content, unparsed);
                 },
-
-                //End of input
                 ( None, None ) => { break; },
-                _ => {
-                    panic!("Invalid parse!\nRemaining text: {:?}", unparsed);
-                } 
             }
         }
 
