@@ -428,16 +428,21 @@ impl<I> Parse<I> for ast::Alternative<I> where
     fn parse(input: I) -> IResult<I, Self> { 
         println!("Parseing Alternative");
         print_nom_input!(input);
-        let (rem, ((method, shuffle), _, cases, _)) = (
-            alt(( 
-                value((ast::AlternateType::Stopping, false), tag("stopping")),
-                value((ast::AlternateType::Once, false),     tag("once")),
-                value((ast::AlternateType::Cycle, false),    tag("cycle")), 
-                value((ast::AlternateType::Stopping, true),  (tag("shuffle"), space0, tag("stopping"))),
-                value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
-                value((ast::AlternateType::Cycle, true),     tag("shuffle"))
-            )),
-            recognize((space0, tag(":"), space0)),
+        let (rem, ((method, shuffle), cases, _)) = (
+            map(
+                (
+                alt(( 
+                    value((ast::AlternateType::Stopping, false), tag("stopping")),
+                    value((ast::AlternateType::Once, false),     tag("once")),
+                    value((ast::AlternateType::Cycle, false),    tag("cycle")), 
+                    value((ast::AlternateType::Stopping, true),  (tag("shuffle"), space0, tag("stopping"))),
+                    value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
+                    value((ast::AlternateType::Cycle, true),     tag("shuffle"))
+                )),
+                recognize((space0, tag(":"), space0)),
+                ),
+                |((method, shuffle), _)|(method, shuffle)
+            ),
 
             many1(
                 map(
@@ -476,7 +481,6 @@ impl<I> Parse<I> for ast::Alternative<I> where
                 value((ast::AlternateType::Cycle, true),     tag("~")),
                 success((ast::AlternateType::Once, false)),
             )),
-            space0,
 
             separated_list1(
                 tag("|"), 
