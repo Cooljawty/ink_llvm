@@ -420,6 +420,76 @@ where
     }
 }
 
+fn condition_list_block<I, Cmp, Sep, Text>(
+    cmp_parser: Cmp,
+    case_separater: Sep,
+    case_text_parser: Text,
+) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
+where
+    Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
+    Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+    Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{(
+    cmp_parser,
+
+    many1( map( (
+        case_separater,
+        fold_many0(
+            alt(( 
+                map_parser(
+                    case_text_parser,
+                    many0(complete(ast::Content::parse)),// as dyn Parser<I, Output = Vec<ast::Content<I>>, Error = E>,
+                ),
+                map(
+                    ast::Content::parse_block,
+                    |block|{ vec![block] },
+                ),
+            )),
+            Vec::<ast::Content<I>>::new,
+            |mut acc, content|{acc.extend(content); acc},
+        ),
+    ), |(_start, content)|{ content } ) ),
+)}
+
+fn condition_list_inline<I, Cmp, Sep, Text>(
+    cmp_parser: Cmp,
+    case_separater: Sep,
+    case_text_parser: Text,
+) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
+where
+    Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
+    Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+    Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{(
+    cmp_parser,
+
+    separated_list1(
+        case_separater,
+        fold_many0(
+            alt(( 
+                map_parser(
+                    case_text_parser,
+                    many0(complete(ast::Content::parse)),// as dyn Parser<I, Output = Vec<ast::Content<I>>, Error = E>,
+                ),
+                map(
+                    ast::Content::parse_block,
+                    |block|{ vec![block] },
+                ),
+            )),
+            Vec::<ast::Content<I>>::new,
+            |mut acc, content|{acc.extend(content); acc},
+        ),
+    )
+)}
+
 impl<I> Parse<I> for ast::Alternative<I> where
     for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
@@ -457,69 +527,14 @@ impl<I> Parse<I> for ast::Alternative<I> where
         let case_separater_inline = tag("|");
         let case_text_parser_inline = is_not("|{}");
 
-        fn condition_list_block<I, Cmp, Sep, Text>(
-            cmp_parser_block: Cmp,
-            case_separater_block: Sep,
-            case_text_parser_block: Text,
-        ) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
-        where
-            Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
-            Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
-            Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
-
-            for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
-            <I as nom::Input>::Item: nom::AsChar,
-            for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
-        {(
-            cmp_parser_block,
-
-            many1( map( (
-                case_separater_block,
-                fold_many0(
-                    alt(( 
-                        map_parser(
-                            case_text_parser_block,
-                            many0(complete(ast::Content::parse)),// as dyn Parser<I, Output = Vec<ast::Content<I>>, Error = E>,
-                        ),
-                        map(
-                            ast::Content::parse_block,
-                            |block|{ vec![block] },
-                        ),
-                    )),
-                    Vec::<ast::Content<I>>::new,
-                    |mut acc, content|{acc.extend(content); acc},
-                ),
-            ), |(_start, content)|{ content } ) ),
-        )}
 
         let (rem, ( ( (method, shuffle), cases), _)) = (
             condition_list_block( cmp_parser_block, case_separater_block, case_text_parser_block ),
             multispace0
-        ).or(
-            (
-                (
-                    cmp_parser_inline,
-                    separated_list1(
-                        case_separater_inline,
-                        fold_many0(
-                            alt(( 
-                                map_parser(
-                                    case_text_parser_inline,
-                                    many0(complete(ast::Content::parse)),
-                                ),
-                                map(
-                                    ast::Content::parse_block,
-                                    |block|{ vec![block] },
-                                ),
-                            )),
-                            Vec::<ast::Content<I>>::new,
-                            |mut acc, content|{acc.extend(content); acc},
-                        ),
-                    ),
-                ),
-                space0
-            )
-        ).parse(input)?;
+        ).or((
+            condition_list_inline( cmp_parser_inline, case_separater_inline, case_text_parser_inline ),
+            space0
+        )).parse(input)?;
 
         let cases = HashMap::from_iter(
             cases.into_iter().enumerate()
