@@ -420,13 +420,13 @@ where
     }
 }
 
-fn condition_list_block<I, Cmp, Sep, Text>(
+fn condition_list_block<I, Expr, Cmp, Sep, Text>(
     cmp_parser: Cmp,
     case_separater: Sep,
     case_text_parser: Text,
-) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
+) -> impl nom::Parser<I, Output = (Expr, Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
 where
-    Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
+    Cmp:  nom::Parser<I, Output = Expr, Error = nom::error::Error<I>>,
     Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
     Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
 
@@ -455,13 +455,13 @@ where
     ), |(_start, content)|{ content } ) ),
 )}
 
-fn condition_list_inline<I, Cmp, Sep, Text>(
+fn condition_list_inline<I, Expr, Cmp, Sep, Text>(
     cmp_parser: Cmp,
     case_separater: Sep,
     case_text_parser: Text,
-) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
+) -> impl nom::Parser<I, Output = (Expr, Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
 where
-    Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
+    Cmp:  nom::Parser<I, Output =  Expr, Error = nom::error::Error<I>>,
     Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
     Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
 
