@@ -442,7 +442,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
             ),
             |((method, shuffle), _)|(method, shuffle)
         );
-        let case_separater_block = (line_ending, space0, tag("-"), space0); 
+        let case_separater_block = recognize((line_ending, space0, tag("-"), space0)); 
         let case_text_parser_block = recognize( many1(
             peek(not(( line_ending, space0, tag("-"))))
             .and(is_not("\n{}"))
@@ -457,7 +457,20 @@ impl<I> Parse<I> for ast::Alternative<I> where
         let case_separater_inline = tag("|");
         let case_text_parser_inline = is_not("|{}");
 
-        let (rem, ((method, shuffle), cases, _)) = (
+        fn condition_list_block<I, Cmp, Sep, Text>(
+            cmp_parser_block: Cmp,
+            case_separater_block: Sep,
+            case_text_parser_block: Text,
+        ) -> impl nom::Parser<I, Output = ((ast::AlternateType, bool), Vec<Vec<ast::Content<I>>>), Error = nom::error::Error<I>>
+        where
+            Cmp:  nom::Parser<I, Output = (ast::AlternateType, bool), Error = nom::error::Error<I>>,
+            Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+            Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
+
+            for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+            <I as nom::Input>::Item: nom::AsChar,
+            for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+        {(
             cmp_parser_block,
 
             many1( map( (
@@ -466,7 +479,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
                     alt(( 
                         map_parser(
                             case_text_parser_block,
-                            many0(complete(ast::Content::parse)),
+                            many0(complete(ast::Content::parse)),// as dyn Parser<I, Output = Vec<ast::Content<I>>, Error = E>,
                         ),
                         map(
                             ast::Content::parse_block,
@@ -476,30 +489,37 @@ impl<I> Parse<I> for ast::Alternative<I> where
                     Vec::<ast::Content<I>>::new,
                     |mut acc, content|{acc.extend(content); acc},
                 ),
-            ), |(_start, content)|{ content })),
+            ), |(_start, content)|{ content } ) ),
+        )}
+
+        let (rem, ( ( (method, shuffle), cases), _)) = (
+            condition_list_block( cmp_parser_block, case_separater_block, case_text_parser_block ),
             multispace0
-        ).or( (
-            cmp_parser_inline,
-            separated_list1(
-                case_separater_inline,
-                fold_many0(
-                    alt(( 
-                        map_parser(
-                            case_text_parser_inline,
-                            many0(complete(ast::Content::parse)),
+        ).or(
+            (
+                (
+                    cmp_parser_inline,
+                    separated_list1(
+                        case_separater_inline,
+                        fold_many0(
+                            alt(( 
+                                map_parser(
+                                    case_text_parser_inline,
+                                    many0(complete(ast::Content::parse)),
+                                ),
+                                map(
+                                    ast::Content::parse_block,
+                                    |block|{ vec![block] },
+                                ),
+                            )),
+                            Vec::<ast::Content<I>>::new,
+                            |mut acc, content|{acc.extend(content); acc},
                         ),
-                        map(
-                            ast::Content::parse_block,
-                            |block|{ vec![block] },
-                        ),
-                    )),
-                    Vec::<ast::Content<I>>::new,
-                    |mut acc, content|{acc.extend(content); acc},
+                    ),
                 ),
-            ),
-            space0
-            ) ).parse(input)?;
-    
+                space0
+            )
+        ).parse(input)?;
 
         let cases = HashMap::from_iter(
             cases.into_iter().enumerate()
