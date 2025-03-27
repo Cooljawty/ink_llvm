@@ -371,7 +371,7 @@ where
 {
 
     #[allow(dead_code)]
-    fn parse(input: I) -> IResult<I, Self>
+    pub fn parse(input: I) -> IResult<I, Self>
     {
         /* TODO
         if let (rem, expr) = ((space0, tag("~"), space0), ast::Expression::parse).parse(input)
@@ -409,9 +409,10 @@ where
         let (rem, block) = delimited(
             tag("{"), 
             alt((
+                map(ast::Switch::parse,      |switch| Self::Switch(switch)), //TODO: Solve precedence issue
                 map(ast::Alternative::parse, |alternative| Self::Alternative(alternative)),
+                
                 //TODO: map(ast::Conditional::parse, |conditional| Self::Conditional(conditional)),
-                //TODO: map(ast::Switch::parse,      |switch| Self::Switch(switch)),
                 //TODO: map(ast::Expression::parse,  |expr| Self::Evaluation(expr)),
             )),
             tag("}")
@@ -502,8 +503,6 @@ impl<I> Parse<I> for ast::Alternative<I> where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
-        println!("Parseing Alternative");
-        print_nom_input!(input);
         let cmp_parser_block = map(
             (
             alt(( 
@@ -550,9 +549,6 @@ impl<I> Parse<I> for ast::Alternative<I> where
                 //TODO: Represent {..||..} as None or empty vec
                 //.filter(|(_index, cases)|!cases.is_empty())
         );
-
-        print_nom_input!(rem);
-        println!("End alternative");
 
         Ok((rem, ast::Alternative{ cases, method, shuffle }))
     }
@@ -604,6 +600,7 @@ impl<I> Parse<I> for ast::Conditional<I> where
     }
 } 
 
+*/
 
 impl<I> Parse<I> for ast::Switch<I> 
 where
@@ -612,31 +609,36 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
-        parse_condition_list::<ast::Content::parse>(
-            Some(ast::Expression::parse, space0, tag(":")),
-            (tag("-"), space0, ast::Expression::parse, space0, tag(":")),
-            opt((tag("-"), space0, tag("else"), space0, tag(":"))),
-        );
+        println!("Parseing Switch");
+        print_nom_input!(input);
+        let (rem, ( ( comparision, cases), _)) = (
+            condition_list_block(
+                map((ast::Expression::parse, (space0, tag(":"))), |(expr, _)|expr),
 
-        let (rem, commpair) = match default { 
-            Some(parser) => {
-                let (rem, p) = parser.parse(input)?;
-                (rem, Some(p))
-            },
-            None => (input, None),
-        };
-        let (rem, cases) = many0(case.and_then(T::parse)).parse(rem)?;
-        let (rem, default) = match default { 
-            Some(parser) => {
-                let (rem, p) = parser.parse(rem)?;
-                let (rem, q) = T::parse(rem)?;
-                (rem, Some((p, q)))
-            },
-            None => (rem, None),
-        };
+                map(
+                    (
+                        (line_ending, space0, tag("-"), space0),
+                        ast::Expression::parse,
+                        (space0, tag(":"))
+                    ),
+                    |(_, expr, _)|expr
+                ),
+
+                recognize( many1(
+                    peek(not(( line_ending, space0, tag("-"))))
+                    .and(is_not("\n{}"))
+                )) 
+                //opt((tag("-"), space0, tag("else"), space0, tag(":"))),
+            ),
+            multispace0
+        ).parse(input)?;
+        let switch = ast::Switch{ comparision, cases, default: None/*todo!*/};
+        println!("{:#?}", switch);
+        print_nom_input!(rem);
+        println!("End Switch");
+        Ok((rem, switch ))
     }
 } 
-*/
 
 impl<I> Parse<I> for ast::Expression 
 where
@@ -644,8 +646,13 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    fn parse(_input: I) -> IResult<I, Self>  
-    { todo!() }
+    fn parse(input: I) -> IResult<I, Self>  
+    { 
+        alt((
+            value(ast::Expression::Literal(crate::types::Value::Bool), alt((tag("true"), tag("false")))),
+            value(ast::Expression::Variable, identifier),
+        )).parse(input) 
+    }
 }
 
 #[cfg(test)]

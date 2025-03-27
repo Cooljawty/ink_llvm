@@ -1,6 +1,6 @@
 use crate::ast::{Expression};
 
-#[derive(Debug,)]
+#[derive(Clone, Debug,)]
 pub enum Value {
     Integer,
     Decimal,
