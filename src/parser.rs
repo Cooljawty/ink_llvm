@@ -428,67 +428,64 @@ impl<I> Parse<I> for ast::Alternative<I> where
     fn parse(input: I) -> IResult<I, Self> { 
         println!("Parseing Alternative");
         print_nom_input!(input);
-        let (rem, ((method, shuffle), cases, _)) = (
-            map(
-                (
-                alt(( 
-                    value((ast::AlternateType::Stopping, false), tag("stopping")),
-                    value((ast::AlternateType::Once, false),     tag("once")),
-                    value((ast::AlternateType::Cycle, false),    tag("cycle")), 
-                    value((ast::AlternateType::Stopping, true),  (tag("shuffle"), space0, tag("stopping"))),
-                    value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
-                    value((ast::AlternateType::Cycle, true),     tag("shuffle"))
-                )),
-                recognize((space0, tag(":"), space0)),
-                ),
-                |((method, shuffle), _)|(method, shuffle)
-            ),
-
-            many1(
-                map(
-                    (
-                        map((line_ending, space0, tag("-"), space0), |x|{println!("New case!"); x}), 
-                        fold_many0(
-                            alt(( 
-                                //Inline Content
-                                map_parser(
-                                    map( recognize( many1(
-                                            peek(not(( line_ending, space0, tag("-"))))
-                                            .and(is_not("\n{}"))
-                                        )), 
-                                    |inner_content: I|{print_nom_input!(inner_content); inner_content},),
-
-                                    many0(complete(ast::Content::parse)),
-                                ),
-                                //Block Content
-                                map( ast::Content::parse_block,
-                                    |block|{println!("inner_content:\t\tParsed block"); vec![block] },
-                                ),
-                            )),
-
-                            Vec::<ast::Content<I>>::new,
-                            |mut acc, content|{acc.extend(content); acc},
-                        ),
-                    ),
-                    |(_start, content)|{ content },
-                ),
-            ),
-            multispace0
-        ).or( (
+        let cmp_parser_block = map(
+            (
             alt(( 
-                value((ast::AlternateType::Stopping, false), tag("!")),
-                value((ast::AlternateType::Cycle, false),    tag("&")), 
-                value((ast::AlternateType::Cycle, true),     tag("~")),
-                success((ast::AlternateType::Once, false)),
+                value((ast::AlternateType::Stopping, false), tag("stopping")),
+                value((ast::AlternateType::Once, false),     tag("once")),
+                value((ast::AlternateType::Cycle, false),    tag("cycle")), 
+                value((ast::AlternateType::Stopping, true),  (tag("shuffle"), space0, tag("stopping"))),
+                value((ast::AlternateType::Once, true),      (tag("shuffle"), space0, tag("once"))),
+                value((ast::AlternateType::Cycle, true),     tag("shuffle"))
             )),
+            recognize((space0, tag(":"), space0)),
+            ),
+            |((method, shuffle), _)|(method, shuffle)
+        );
+        let case_separater_block = (line_ending, space0, tag("-"), space0); 
+        let case_text_parser_block = recognize( many1(
+            peek(not(( line_ending, space0, tag("-"))))
+            .and(is_not("\n{}"))
+        )); 
 
-            separated_list1(
-                tag("|"), 
+        let cmp_parser_inline = alt(( 
+            value((ast::AlternateType::Stopping, false), tag("!")),
+            value((ast::AlternateType::Cycle, false),    tag("&")), 
+            value((ast::AlternateType::Cycle, true),     tag("~")),
+            success((ast::AlternateType::Once, false)),
+        ));
+        let case_separater_inline = tag("|");
+        let case_text_parser_inline = is_not("|{}");
 
+        let (rem, ((method, shuffle), cases, _)) = (
+            cmp_parser_block,
+
+            many1( map( (
+                case_separater_block,
                 fold_many0(
                     alt(( 
                         map_parser(
-                            is_not("|{}"), 
+                            case_text_parser_block,
+                            many0(complete(ast::Content::parse)),
+                        ),
+                        map(
+                            ast::Content::parse_block,
+                            |block|{ vec![block] },
+                        ),
+                    )),
+                    Vec::<ast::Content<I>>::new,
+                    |mut acc, content|{acc.extend(content); acc},
+                ),
+            ), |(_start, content)|{ content })),
+            multispace0
+        ).or( (
+            cmp_parser_inline,
+            separated_list1(
+                case_separater_inline,
+                fold_many0(
+                    alt(( 
+                        map_parser(
+                            case_text_parser_inline,
                             many0(complete(ast::Content::parse)),
                         ),
                         map(
@@ -503,6 +500,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
             space0
             ) ).parse(input)?;
     
+
         let cases = HashMap::from_iter(
             cases.into_iter().enumerate()
                 //TODO: Represent {..||..} as None or empty vec
