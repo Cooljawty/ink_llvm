@@ -23,6 +23,7 @@ use nom::{
         anychar,one_of,
         complete::*,
     },
+    number::float,
     combinator::*,
     branch::{alt,},
     sequence::{delimited, preceded,},
@@ -358,7 +359,7 @@ where
 //Content
 impl<I> ast::Content<I>
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -423,7 +424,7 @@ where
     Sep:  nom::Parser<I, Output = Case, Error = nom::error::Error<I>>,
     Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
 
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -461,7 +462,7 @@ where
     Sep:  nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
     Text: nom::Parser<I, Output = I, Error = nom::error::Error<I>>,
 
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -490,7 +491,7 @@ where
 }
 
 impl<I> Parse<I> for ast::Alternative<I> where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
@@ -547,7 +548,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
 } 
 
 impl<I> Parse<I> for ast::Conditional<I> where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
@@ -610,7 +611,7 @@ impl<I> Parse<I> for ast::Conditional<I> where
 
 impl<I> Parse<I> for ast::Switch<I> 
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
@@ -655,13 +656,28 @@ where
 
 impl<I> Parse<I> for ast::Expression 
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
     fn parse(input: I) -> IResult<I, Self>  
     { 
+        use std::str::FromStr;
+        let int_parser = recognize((opt(tag("-")), digit1));
+        let float_parser = recognize((opt(tag("-")), digit1, tag("."), digit1));
         alt((
+            map(
+                map_res(float_parser, |num: I| {
+                    f32::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
+                }),
+                |num| ast::Expression::Literal(crate::types::Value::Decimal(num))
+            ),
+            map(
+                map_res(int_parser, |num: I| {
+                    isize::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
+                }),
+                |num| ast::Expression::Literal(crate::types::Value::Integer(num))
+            ),
             value(ast::Expression::Literal(crate::types::Value::Bool(true)), tag("true")),
             value(ast::Expression::Literal(crate::types::Value::Bool(false)), tag("false")),
             map(identifier, |name| ast::Expression::Variable(name)),
@@ -1100,7 +1116,23 @@ mod tests {
 
     fn match_expression<'test>(expression: Option<&'test ast::Expression>, expected: Option<&'test ast::Expression>, unparsed: &'test str) -> bool {
         match (expression, expected) { 
-            //TODO: (Some(ast::Expression::Literal( crate::types::Value)), Some(ast::Expression::Literal( crate::types::Value))) => {},
+            (Some(expression @ ast::Expression::Literal(value)), Some(expected_expression @ ast::Expression::Literal(expected))) => {
+                use crate::types::Value;
+                match (value, expected) {
+                    (Value::Integer(value), Value::Integer(expected)) => { assert_eq!(value, expected) },
+                    (Value::Decimal(value), Value::Decimal(expected)) => { assert_eq!(value, expected) },
+                    (Value::String(value), Value::String(expected)) => { assert_eq!(value, expected) },
+                    (Value::Bool(value), Value::Bool(expected)) => { assert_eq!(value, expected) },
+                    (Value::Divert,    Value::Divert) => { todo!("Divert comparison") },
+                    (Value::ListValue, Value::ListValue) => { todo!("List item comparision") },
+                    (_, _) => {
+                        panic!(
+                            "Expression parsed incorrectly!\nParsed expression:   {:?}\nExpected expression: {:?}",
+                            expression, expected_expression
+                        )
+                    }
+                }
+            },
             //TODO: (Some(ast::Expression::Constant(crate::types::Value)), Some(ast::Expression::Constant(crate::types::Value))) => {},
             //TODO: (Some(ast::Expression::Variable), Some(ast::Expression::Variable) => {},
             //TODO: (Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>)), Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>))) => {},
@@ -1114,7 +1146,7 @@ mod tests {
                 | (ast::Expression::BinOp(_, _, _),ast::Expression::BinOp(_, _, _),)
                  => {},
 
-                (expression, expected) => {panic!("Content parsed incorrectly!\nParsed expression:   {:?}\nExpected expression: {:?}", expression, expected) },
+                (expression, expected) => {panic!("Expression parsed incorrectly!\nParsed expression:   {:?}\nExpected expression: {:?}", expression, expected) },
             }
 
             ( None, Some(expected) ) => {
@@ -1130,7 +1162,7 @@ mod tests {
     }
     #[test]
     fn parse_expressions() -> Result<(), Box<dyn std::error::Error>> {
-        let mut expected = vec![
+        let expected = vec![
             ast::Expression::Literal(crate::types::Value::Integer(401)),
             ast::Expression::Literal(crate::types::Value::Decimal(4.1)),
             ast::Expression::Literal(crate::types::Value::String("string".to_string())),
@@ -1138,13 +1170,18 @@ mod tests {
             ast::Expression::Literal(crate::types::Value::Bool(false)),
         ];
         
-        let input = include_str!("../tests/expressions.ink");
-        while let (input, (expression, _spaces)) = (ast::Expression::parse, multispace0).parse(input)? {
-            let expected = expected.remove(0);
-            match_expression(Some(&expression), Some(&expected), &input);
+        let (unparsed, expressions) = nom::multi::many1(
+            map(
+                (complete(ast::Expression::parse), multispace0),
+                |(expression, _)|expression,
+            )
+        ).parse(include_str!("../tests/expressions.ink"))?;
 
-            if eof::<&str, nom::error::Error<&str>>.parse(input).is_ok() { break; }
+        for (expression, expected) in expressions.into_iter().zip(expected.into_iter()) {
+            match_expression(Some(&expression), Some(&expected), &unparsed);
         }
+
+        eof::<&str, nom::error::Error<&str>>.parse(unparsed)?;
 
         Ok(())
     }
