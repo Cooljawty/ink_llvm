@@ -22,4 +22,4 @@ Text with conditional block {
 - cond: True!
 - else: False
 }.
-Text with conditional {cond: True!}.
+Text with conditional {cond:  True!}.

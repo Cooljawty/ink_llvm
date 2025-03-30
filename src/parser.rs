@@ -615,7 +615,7 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
-        let (rem, ( ( comparision, cases), default, _)) = (
+        let (rem, ( ( compairison, cases), default, _)) = (
             condition_list_block(
                 map((ast::Expression::parse, (space0, tag(":"), space0)), |(expr, _)|expr),
 
@@ -644,7 +644,7 @@ where
         ).parse(input)?;
 
         let switch = ast::Switch{ 
-            comparision, 
+            compairison, 
             cases,
             default,
         };
@@ -662,8 +662,9 @@ where
     fn parse(input: I) -> IResult<I, Self>  
     { 
         alt((
-            value(ast::Expression::Literal(crate::types::Value::Bool), alt((tag("true"), tag("false")))),
-            value(ast::Expression::Variable, identifier),
+            value(ast::Expression::Literal(crate::types::Value::Bool(true)), tag("true")),
+            value(ast::Expression::Literal(crate::types::Value::Bool(false)), tag("false")),
+            map(identifier, |name| ast::Expression::Variable(name)),
         )).parse(input) 
     }
 }
@@ -937,16 +938,34 @@ mod tests {
                 }
             },
 
-            /*TODO:
-            (Some(ast::Content::Conditional(ast::Conditional{cases: content, ..})), Some(ast::Content::Conditional(ast::Conditional{cases: expected, ..})))
+            (Some(ast::Content::Conditional(content_block @ ast::Conditional{cases: content, ..})), Some(ast::Content::Conditional(expected_block @ ast::Conditional{cases: expected, ..})))
             => {
                 for (content, expected) in content.iter().zip(expected.iter()) {
-                    matches(content.1, expected.1);
+                    let ((content_expr, content), (expected_expr, expected)) = (content, expected);
+                    assert_eq!(content_expr, expected_expr);
+
+                    for (content, expected) in content.iter().zip(expected.iter()) {
+                        match_content( Some(content), Some(expected), unparsed);
+                    }
+                }
+
+                match (&content_block.default, &expected_block.default){
+                    (Some(content), Some(expected)) => { 
+                        for (content, expected) in content.iter().zip(expected.iter()) {
+                            match_content( Some(content), Some(expected), unparsed);
+                        }
+                    },
+                    (None, None) => {},
+
+                    (Some(_content), None) => { panic!("Did not expect a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
+                    (None, Some(_expected)) => { panic!("Expected a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
                 }
             },
-            */
+
             (Some(ast::Content::Switch(content_block @ ast::Switch{cases: content, ..})), Some(ast::Content::Switch(expected_block @ ast::Switch{cases: expected, ..})))
             => {
+                match_expression(Some(&content_block.compairison), Some(&expected_block.compairison), &unparsed);
+                    
                 for (content, expected) in content.iter().zip(expected.iter()) {
                     let ((content_expr, content), (expected_expr, expected)) = (content, expected);
                     assert_eq!(content_expr, expected_expr);
@@ -1045,9 +1064,9 @@ mod tests {
 
             ast::Content::Text("Text with switch "), 
             ast::Content::Switch(ast::Switch{
-                comparision: ast::Expression::Variable,
+                compairison: ast::Expression::Variable("cond".to_string()),
                 cases: vec![
-                    (ast::Expression::Literal(crate::types::Value::Bool), vec![ast::Content::Text("True!")]),
+                    (ast::Expression::Literal(crate::types::Value::Bool(true)), vec![ast::Content::Text("True!")]),
                 ],
                 default: Some(vec![ast::Content::Text("False")]),
             }),
@@ -1056,7 +1075,7 @@ mod tests {
             ast::Content::Text("Text with conditional block "),
             ast::Content::Conditional(ast::Conditional{
                 cases: vec![
-                    (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
+                    (ast::Expression::Variable("cond".to_string()), vec![ast::Content::Text("True!")]),
                 ],
                 default: Some(vec![ast::Content::Text("False")]),
             }),
@@ -1065,7 +1084,7 @@ mod tests {
             ast::Content::Text("Text with conditional "),
             ast::Content::Conditional(ast::Conditional{
                 cases: vec![
-                    (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
+                    (ast::Expression::Variable("cond".to_string()), vec![ast::Content::Text("  True!")]),
                 ],
                 default: None,
             }), ast::Content::Text("."),
@@ -1090,7 +1109,7 @@ mod tests {
             ( Some(expression), Some(expected) ) => match (expression, expected) {
                   (ast::Expression::Literal(_),    ast::Expression::Literal(_),    )
                 | (ast::Expression::Constant(_),   ast::Expression::Constant(_),   )
-                | (ast::Expression::Variable,      ast::Expression::Variable,      )
+                | (ast::Expression::Variable(_),      ast::Expression::Variable(_),)
                 | (ast::Expression::UnaryOp(_, _), ast::Expression::UnaryOp(_, _), )
                 | (ast::Expression::BinOp(_, _, _),ast::Expression::BinOp(_, _, _),)
                  => {},
@@ -1112,18 +1131,17 @@ mod tests {
     #[test]
     fn parse_expressions() -> Result<(), Box<dyn std::error::Error>> {
         let mut expected = vec![
-            ast::Expression::Literal(crate::types::Value::Integer),
-            ast::Expression::Literal(crate::types::Value::Decimal),
-            ast::Expression::Literal(crate::types::Value::String),
-            ast::Expression::Literal(crate::types::Value::Bool),
-            ast::Expression::Literal(crate::types::Value::Bool),
+            ast::Expression::Literal(crate::types::Value::Integer(401)),
+            ast::Expression::Literal(crate::types::Value::Decimal(4.1)),
+            ast::Expression::Literal(crate::types::Value::String("string".to_string())),
+            ast::Expression::Literal(crate::types::Value::Bool(true)),
+            ast::Expression::Literal(crate::types::Value::Bool(false)),
         ];
         
         let input = include_str!("../tests/content.ink");
         while let (input, (expression, _spaces)) = (ast::Expression::parse, multispace0).parse(input)? {
             let expected = expected.remove(0);
             match_expression(Some(&expression), Some(&expected), &input);
-            //println!("Parsed:   {:?}\nExpected: {:?}\n----", expression, expected);
 
             if eof::<&str, nom::error::Error<&str>>.parse(input).is_ok() { break; }
         }

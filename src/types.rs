@@ -2,10 +2,10 @@ use crate::ast::{Expression};
 
 #[derive(Clone, PartialEq, Debug,)]
 pub enum Value {
-    Integer,
-    Decimal,
-    String,
-    Bool,
+    Integer(isize),
+    Decimal(f32),
+    String(String),
+    Bool(bool),
     Divert, //NOTE: Divert values cannot contain arguments
     ListValue,
 }

@@ -142,7 +142,7 @@ pub struct Conditional<I> {
 #[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Switch<I> {                            
-    pub(crate) comparision: Expression,                      
+    pub(crate) compairison: Expression,                      
     pub(crate) cases: Vec<(Expression, Vec<Content<I>>)>,
     pub(crate) default: Option<Vec<Content<I>>>,
 }
@@ -164,7 +164,7 @@ pub enum Content<I> {
 #[derive(Clone, PartialEq, Debug,)]
 pub enum Expression  {
     Literal(Value),
-    Variable,
+    Variable(Identifier),
     Constant(Value),
     UnaryOp(Operation, Box<Expression>),
     BinOp(Operation, Box<Expression>, Box<Expression>),
