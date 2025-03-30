@@ -522,7 +522,7 @@ impl<I> Parse<I> for ast::Alternative<I> where
             success((ast::AlternateType::Once, false)),
         ));
         let case_separater_inline = tag("|");
-        let case_text_parser_inline = is_not("|{}");
+        let case_text_parser_inline = is_not("\n|{}"); //TODO: Allow delimited line breaks (Move into function?)
 
 
         let (rem, ( ( (method, shuffle), cases), _)) = (
@@ -924,6 +924,7 @@ mod tests {
 
         println!("Parsed: {:#?}", content);
         let mut content = content.into_iter();
+        print_nom_input!(unparsed);
 
         let mut expected = [
             ast::Content::Text("Line of text"), ast::Content::Newline,
@@ -991,8 +992,8 @@ mod tests {
                     (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
                 ],
                 default: None,
-            }),
-            ast::Content::Text("."),
+            }), ast::Content::Text("."),
+            ast::Content::Newline, //TODO: End of input should not be newline
         ].into_iter();
 
 
