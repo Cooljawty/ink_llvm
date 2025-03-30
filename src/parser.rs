@@ -403,9 +403,8 @@ where
             tag("{"), 
             alt((
                 map(ast::Switch::parse,      |switch| Self::Switch(switch)), //TODO: Solve precedence issue
+                map(ast::Conditional::parse, |conditional| Self::Conditional(conditional)),
                 map(ast::Alternative::parse, |alternative| Self::Alternative(alternative)),
-                
-                //TODO: map(ast::Conditional::parse, |conditional| Self::Conditional(conditional)),
                 //TODO: map(ast::Expression::parse,  |expr| Self::Evaluation(expr)),
             )),
             tag("}")
@@ -547,53 +546,48 @@ impl<I> Parse<I> for ast::Alternative<I> where
     }
 } 
 
-/*
 impl<I> Parse<I> for ast::Conditional<I> where
     for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
-        /*
-        let block  = parse_condition_list::<ast::Content::parse>(
-            None,
-            map((tag("-"), space0, ast::Expression::parse, space0, tag(":")), |(_, _, expr _, _)| expr),
-            Some((tag("-"), space0, tag("else"), space0, tag(":"), space0)),
-        );
-    
-        let mut called = false;
-        let inline = parse_condition_list::<ast::Content::parse_block>( 
-            Some(ast::Expression::parse, space0, tag(":")),
-            ||{ if !called { called = true; success} else { fail }},
-            Some((tag("|"), space0)),
-        );
+        let (rem, ( ( _, cases), default, _)) = (
+            condition_list_block(
+                success(()),
 
-        let (rem, commpair) = match default { 
-            Some(parser) => {
-                let (rem, p) = parser.parse(input)?;
-                (rem, Some(p))
-            },
-            None => (input, None),
-        };
-        let (rem, cases) = many0(case.and_then(T::parse)).parse(rem)?;
-        let (rem, default) = match default { 
-            Some(parser) => {
-                let (rem, p) = parser.parse(rem)?;
-                let (rem, q) = T::parse(rem)?;
-                (rem, Some((p, q)))
-            },
-            None => (rem, None),
+                map(
+                    (
+                        (line_ending, space0, tag("-"), space0),
+                        map(not(tag("else")).and(ast::Expression::parse), |(_, expr)|expr),
+                        (space0, tag(":"), space0)
+                    ),
+                    |(_, expr, _)|expr
+                ),
+
+                recognize( many1(
+                    peek(not(( line_ending, space0, tag("-"))))
+                    .and(is_not("\n{}"))
+                )) 
+            ),
+            opt( map( 
+                    (
+                        (line_ending, space0, tag("-"), space0, tag("else"), space0, tag(":"), space0),
+                        map_parser(is_not("\n{}"), many1(ast::Content::parse)),
+                    ),
+                    |(_, content)| content,
+            )),
+            multispace0
+        ).parse(input)?;
+
+        let switch = ast::Conditional{ 
+            cases,
+            default,
         };
 
-        if let Some(cond) = cond {
-            cases = vec![(todo!(), cases[0])]
-        }
-        Ok(ast::Conditional{ cases, default, })
-        */
+        Ok((rem, switch ))
     }
 } 
-
-*/
 
 impl<I> Parse<I> for ast::Switch<I> 
 where
@@ -602,8 +596,6 @@ where
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 { 
     fn parse(input: I) -> IResult<I, Self> { 
-        println!("Parseing Switch");
-        print_nom_input!(input);
         let (rem, ( ( comparision, cases), default, _)) = (
             condition_list_block(
                 map((ast::Expression::parse, (space0, tag(":"), space0)), |(expr, _)|expr),
@@ -637,9 +629,7 @@ where
             cases,
             default,
         };
-        println!("{:#?}", switch);
-        print_nom_input!(rem);
-        println!("End Switch");
+
         Ok((rem, switch ))
     }
 } 
@@ -967,7 +957,16 @@ mod tests {
             }),
             ast::Content::Text("."), ast::Content::Newline,
             
-            ast::Content::Text("Text with "),
+            ast::Content::Text("Text with conditional block "),
+            ast::Content::Conditional(ast::Conditional{
+                cases: vec![
+                    (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
+                ],
+                default: Some(vec![ast::Content::Text("False")]),
+            }),
+            ast::Content::Text("."), ast::Content::Newline,
+
+            ast::Content::Text("Text with conditional "),
             ast::Content::Conditional(ast::Conditional{
                 cases: vec![
                     (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
