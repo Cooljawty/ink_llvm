@@ -12,4 +12,10 @@ Text with {cycle:
 	- nested {~random!|} content
 	- alternating
 } content
-Text with condition {cond: True!}.
+
+Text with switch {cond:
+- true: True!
+- else: False
+}.
+
+Text with {cond: True!}.

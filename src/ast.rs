@@ -161,7 +161,7 @@ pub enum Content<I> {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug,)]
+#[derive(Clone, PartialEq, Debug,)]
 pub enum Expression  {
     Literal(Value),
     Variable,
@@ -171,7 +171,7 @@ pub enum Expression  {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug,)]
+#[derive(Clone, PartialEq, Debug,)]
 pub enum Operation {
     ///Logical:
     And,

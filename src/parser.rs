@@ -314,18 +314,11 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-    let (rem, name) = verify(
-        //TODO: Add parsers for non-ASCII characters
-        recognize(many0(alt((alphanumeric1, tag("_"))))),
-        |n: &I| {let c = 
-            n.iter_elements()
-             .nth(0)
-             .expect("Parsed identifier as empty string?!")
-             .as_char();
-
-            c.is_alpha() || c == '_'
-        }).parse(input)?;
-
+    //TODO: Add parsers for non-ASCII characters
+    let (rem, name) = recognize(( 
+        alt(( tag("_"), alpha1 )),
+        many0( alt( (tag("_"), alphanumeric1) ) ) 
+    )).parse(input)?;
     
     let name = name.iter_elements().map(|c| c.as_char()).collect();
 
@@ -421,7 +414,7 @@ where
     }
 }
 
-fn condition_list_block<I, Expr, Cmp, Case, Sep, Text>(
+fn condition_list_block<I, Expr, Case, Cmp, Sep, Text>(
     cmp_parser: Cmp,
     case_separater: Sep,
     case_text_parser: Text,
@@ -611,15 +604,15 @@ where
     fn parse(input: I) -> IResult<I, Self> { 
         println!("Parseing Switch");
         print_nom_input!(input);
-        let (rem, ( ( comparision, cases), _)) = (
+        let (rem, ( ( comparision, cases), default, _)) = (
             condition_list_block(
-                map((ast::Expression::parse, (space0, tag(":"))), |(expr, _)|expr),
+                map((ast::Expression::parse, (space0, tag(":"), space0)), |(expr, _)|expr),
 
                 map(
                     (
                         (line_ending, space0, tag("-"), space0),
-                        ast::Expression::parse,
-                        (space0, tag(":"))
+                        map(not(tag("else")).and(ast::Expression::parse), |(_, expr)|expr),
+                        (space0, tag(":"), space0)
                     ),
                     |(_, expr, _)|expr
                 ),
@@ -628,11 +621,22 @@ where
                     peek(not(( line_ending, space0, tag("-"))))
                     .and(is_not("\n{}"))
                 )) 
-                //opt((tag("-"), space0, tag("else"), space0, tag(":"))),
             ),
+            opt( map( 
+                    (
+                        (line_ending, space0, tag("-"), space0, tag("else"), space0, tag(":"), space0),
+                        map_parser(is_not("\n{}"), many1(ast::Content::parse)),
+                    ),
+                    |(_, content)| content,
+            )),
             multispace0
         ).parse(input)?;
-        let switch = ast::Switch{ comparision, cases, default: None/*todo!*/};
+
+        let switch = ast::Switch{ 
+            comparision, 
+            cases,
+            default,
+        };
         println!("{:#?}", switch);
         print_nom_input!(rem);
         println!("End Switch");
@@ -953,7 +957,17 @@ mod tests {
             }),
             ast::Content::Text(" content"), ast::Content::Newline,
 
-            ast::Content::Text("Text with condition "),
+            ast::Content::Text("Text with switch "), 
+            ast::Content::Switch(ast::Switch{
+                comparision: ast::Expression::Variable,
+                cases: vec![
+                    (ast::Expression::Literal(crate::types::Value::Bool), vec![ast::Content::Text("True!")]),
+                ],
+                default: Some(vec![ast::Content::Text("False")]),
+            }),
+            ast::Content::Text("."), ast::Content::Newline,
+            
+            ast::Content::Text("Text with "),
             ast::Content::Conditional(ast::Conditional{
                 cases: vec![
                     (ast::Expression::Variable, vec![ast::Content::Text("True!")]),
@@ -968,7 +982,7 @@ mod tests {
             match (content, expected) { 
                 //Text matching
                 ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
-                    assert!(text == expected, "ivalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
+                    assert!(text == expected, "invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
                 }, 
                 
                 (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
@@ -990,13 +1004,30 @@ mod tests {
                         matches(content.1, expected.1);
                     }
                 },
-                (Some(ast::Content::Switch(ast::Switch{cases: content, ..})),      Some(ast::Content::Switch(ast::Switch{cases: expected, ..}))     )
+                */
+                (Some(ast::Content::Switch(content_block @ ast::Switch{cases: content, ..})), Some(ast::Content::Switch(expected_block @ ast::Switch{cases: expected, ..})))
                 => {
                     for (content, expected) in content.iter().zip(expected.iter()) {
-                        matches(content.1, expected.1);
+                        let ((content_expr, content), (expected_expr, expected)) = (content, expected);
+                        assert_eq!(content_expr, expected_expr);
+
+                        for (content, expected) in content.iter().zip(expected.iter()) {
+                            matches( Some(content), Some(expected), unparsed);
+                        }
+                    }
+
+                    match (&content_block.default, &expected_block.default){
+                        (Some(content), Some(expected)) => { 
+                            for (content, expected) in content.iter().zip(expected.iter()) {
+                                matches( Some(content), Some(expected), unparsed);
+                            }
+                        },
+                        (None, None) => {},
+
+                        (Some(_content), None) => { panic!("Did not expect a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
+                        (None, Some(_expected)) => { panic!("Expected a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
                     }
                 },
-                */
 
                 ( Some(content), Some(expected) ) => match (content, expected) {
                       (ast::Content::Logic(_),       ast::Content::Logic(_)      )
