@@ -309,6 +309,17 @@ where
 
 }
 
+fn collect_input<I, T>(input: I) -> T
+where
+    T: FromIterator<char>,
+
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    input.iter_elements().map(|c| c.as_char()).collect::<T>()
+}
+
 fn identifier<I>(input: I) -> IResult<I, ast::Identifier> 
 where
 	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str>,
@@ -321,9 +332,7 @@ where
         many0( alt( (tag("_"), alphanumeric1) ) ) 
     )).parse(input)?;
     
-    let name = name.iter_elements().map(|c| c.as_char()).collect();
-
-    Ok((rem, name))
+    Ok((rem, collect_input(name)))
 }
 
 fn parameter_list<I>(input: I) -> IResult<I, Vec<ast::Parameter>> 
@@ -377,24 +386,7 @@ where
         */
         if      let Ok((rem, _block)) = peek(char::<I, nom::error::Error<I>>('{')).parse(input.clone()) { Self::parse_block(rem) }
         else if let Ok((rem, _newline)) = many1(line_ending::<I, nom::error::Error<I>>).parse(input.clone()) { Ok( (rem, ast::Content::Newline) ) }
-        else
-        {
-            let (input, text_length) = peek(fold_many1(
-                alt((
-                    complete(verify(is_not("\\\n{}"), |fragment: &I|fragment.input_len() > 0)), //Literal
-                    complete(recognize(preceded(char('\\'), is_not("\r\n")))), //Escaped char
-                )),
-                || 0usize,
-                |text_length, fragment: I| text_length + fragment.input_len() 
-            )).parse(input)?;
-
-            let (rem, text) = input.take_split(text_length);
-            
-            //Escaped whitespace
-            let (rem, _) = opt(recognize(preceded(char('\\'), multispace1))).parse(rem)?;
-
-            Ok( (rem, Self::Text(text)) )
-        }
+        else { Self::parse_text(input, "\\\n{}") }
     }
 
     #[allow(dead_code)]
@@ -411,6 +403,25 @@ where
             tag("}")
         ).parse(input)?;
         Ok((rem, block))
+    }
+
+   fn parse_text(input: I, delimiters: &'static str) -> IResult<I, Self> 
+   {
+        let (input, text_length) = peek(fold_many1(
+            alt((
+                complete(verify(is_not(delimiters), |fragment: &I|fragment.input_len() > 0)), //Literal
+                complete(recognize(preceded(char('\\'), is_not("\r\n")))), //Escaped char
+            )),
+            || 0usize,
+            |text_length, fragment: I| text_length + fragment.input_len() 
+        )).parse(input)?;
+
+        let (rem, text) = input.take_split(text_length);
+        
+        //Escaped whitespace
+        let (rem, _) = opt(recognize(preceded(char('\\'), multispace1))).parse(rem)?;
+
+        Ok( (rem, Self::Text(text)) )
     }
 }
 
@@ -662,25 +673,45 @@ where
 {
     fn parse(input: I) -> IResult<I, Self>  
     { 
+        use crate::types::Value;
+
         use std::str::FromStr;
         let int_parser = recognize((opt(tag("-")), digit1));
         let float_parser = recognize((opt(tag("-")), digit1, tag("."), digit1));
         alt((
+            //String Expression
+            map(
+                (
+                    tag("\""), 
+                    recognize(many0(
+                        |input| ast::Content::parse_text(input, "\\\n{}\"")
+                    )),
+                    tag("\"")
+                ),
+                |(_, string, _)|ast::Expression::Literal(Value::String(collect_input(string))),
+            ),
+
+            //Numbers (Integers and decimals)
             map(
                 map_res(float_parser, |num: I| {
                     f32::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
                 }),
-                |num| ast::Expression::Literal(crate::types::Value::Decimal(num))
+                |num| ast::Expression::Literal(Value::Decimal(num))
             ),
             map(
                 map_res(int_parser, |num: I| {
                     isize::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
                 }),
-                |num| ast::Expression::Literal(crate::types::Value::Integer(num))
+                |num| ast::Expression::Literal(Value::Integer(num))
             ),
-            value(ast::Expression::Literal(crate::types::Value::Bool(true)), tag("true")),
-            value(ast::Expression::Literal(crate::types::Value::Bool(false)), tag("false")),
+            
+            //Boolean 
+            value(ast::Expression::Literal(Value::Bool(true)), tag("true")),
+            value(ast::Expression::Literal(Value::Bool(false)), tag("false")),
+
+            //Variable
             map(identifier, |name| ast::Expression::Variable(name)),
+
         )).parse(input) 
     }
 }
@@ -1162,12 +1193,14 @@ mod tests {
     }
     #[test]
     fn parse_expressions() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::types::Value;
         let expected = vec![
-            ast::Expression::Literal(crate::types::Value::Integer(401)),
-            ast::Expression::Literal(crate::types::Value::Decimal(4.1)),
-            ast::Expression::Literal(crate::types::Value::String("string".to_string())),
-            ast::Expression::Literal(crate::types::Value::Bool(true)),
-            ast::Expression::Literal(crate::types::Value::Bool(false)),
+            ast::Expression::Literal(Value::Integer(401)),
+            ast::Expression::Literal(Value::Decimal(4.1)),
+            ast::Expression::Literal(Value::String("string".to_string())),
+            ast::Expression::Literal(Value::String("string\\\ndelimited".to_string())),
+            ast::Expression::Literal(Value::Bool(true)),
+            ast::Expression::Literal(Value::Bool(false)),
         ];
         
         let (unparsed, expressions) = nom::multi::many1(
@@ -1176,6 +1209,8 @@ mod tests {
                 |(expression, _)|expression,
             )
         ).parse(include_str!("../tests/expressions.ink"))?;
+
+        println!("Parsed: {:?}", expressions);
 
         for (expression, expected) in expressions.into_iter().zip(expected.into_iter()) {
             match_expression(Some(&expression), Some(&expected), &unparsed);

@@ -1,6 +1,8 @@
 401
 4.1
 "string"
+"string\
+delimited"
 true false
 
 -> knot
