@@ -918,6 +918,82 @@ mod tests {
         Ok(())
     }
 
+    fn match_content<'test>(content: Option<&'test ast::Content<&'test str>>, expected: Option<&'test ast::Content<&'test str>>, unparsed: &'test str) -> bool {
+        match (content, expected) { 
+            //Text matching
+            ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
+                assert!(text == expected, "invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
+            }, 
+            
+            (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
+            => {
+                assert!(content.len() == expected.len(), "Diffrent number of cases!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block);
+
+                for i in expected.keys() {
+                    let mut content  = content.get(&i).unwrap().iter();
+                    let mut expected = expected.get(&i).unwrap().iter();
+
+                    while match_content( content.next(), expected.next(), unparsed) {};
+                }
+            },
+
+            /*TODO:
+            (Some(ast::Content::Conditional(ast::Conditional{cases: content, ..})), Some(ast::Content::Conditional(ast::Conditional{cases: expected, ..})))
+            => {
+                for (content, expected) in content.iter().zip(expected.iter()) {
+                    matches(content.1, expected.1);
+                }
+            },
+            */
+            (Some(ast::Content::Switch(content_block @ ast::Switch{cases: content, ..})), Some(ast::Content::Switch(expected_block @ ast::Switch{cases: expected, ..})))
+            => {
+                for (content, expected) in content.iter().zip(expected.iter()) {
+                    let ((content_expr, content), (expected_expr, expected)) = (content, expected);
+                    assert_eq!(content_expr, expected_expr);
+
+                    for (content, expected) in content.iter().zip(expected.iter()) {
+                        match_content( Some(content), Some(expected), unparsed);
+                    }
+                }
+
+                match (&content_block.default, &expected_block.default){
+                    (Some(content), Some(expected)) => { 
+                        for (content, expected) in content.iter().zip(expected.iter()) {
+                            match_content( Some(content), Some(expected), unparsed);
+                        }
+                    },
+                    (None, None) => {},
+
+                    (Some(_content), None) => { panic!("Did not expect a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
+                    (None, Some(_expected)) => { panic!("Expected a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
+                }
+            },
+
+            ( Some(content), Some(expected) ) => match (content, expected) {
+                  (ast::Content::Logic(_),       ast::Content::Logic(_)      )
+                | (ast::Content::Evaluation(_),  ast::Content::Evaluation(_) )
+                | (ast::Content::Alternative(_), ast::Content::Alternative(_))
+                | (ast::Content::Conditional(_), ast::Content::Conditional(_))
+                | (ast::Content::Switch(_),      ast::Content::Switch(_)     )
+                | (ast::Content::Branch(_),      ast::Content::Branch(_)     )
+                | (ast::Content::Text(_),        ast::Content::Text(_)       )
+                | (ast::Content::Newline,        ast::Content::Newline       ) => {},
+
+                (content, expected) => {panic!("Content parsed incorrectly!\nParsed content:   {:?}\nExpected content: {:?}", content, expected) },
+            }
+
+            ( None, Some(expected) ) => {
+                panic!("Expected content but input left unparsed!\nExpected content: {:?}\nUnparsed input:   {:?}", expected, unparsed);
+            },
+            ( Some(content), None ) => {
+                panic!("Expected end of input but found content!\nParsed content: {:?}\nUnparsed text:  {:?}", content, unparsed);
+            },
+            ( None, None ) => { return false; },
+        };
+        
+        true
+    }
+
     #[test]
     fn parse_content() -> Result<(), Box<dyn std::error::Error>> {
         let (unparsed, content) = nom::multi::many1(complete(ast::Content::parse)).parse(include_str!("../tests/content.ink"))?;
@@ -997,83 +1073,60 @@ mod tests {
         ].into_iter();
 
 
-        fn matches<'test>(content: Option<&'test ast::Content<&'test str>>, expected: Option<&'test ast::Content<&'test str>>, unparsed: &'test str) -> bool {
-            match (content, expected) { 
-                //Text matching
-                ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
-                    assert!(text == expected, "invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
-                }, 
-                
-                (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
-                => {
-                    assert!(content.len() == expected.len(), "Diffrent number of cases!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block);
 
-                    for i in expected.keys() {
-                        let mut content  = content.get(&i).unwrap().iter();
-                        let mut expected = expected.get(&i).unwrap().iter();
+        while match_content( (&content.next()).into(), (&expected.next()).into(), &unparsed) {};
 
-                        while matches( content.next(), expected.next(), unparsed) {};
-                    }
-                },
+        Ok(())
+    }
 
-                /*TODO:
-                (Some(ast::Content::Conditional(ast::Conditional{cases: content, ..})), Some(ast::Content::Conditional(ast::Conditional{cases: expected, ..})))
-                => {
-                    for (content, expected) in content.iter().zip(expected.iter()) {
-                        matches(content.1, expected.1);
-                    }
-                },
-                */
-                (Some(ast::Content::Switch(content_block @ ast::Switch{cases: content, ..})), Some(ast::Content::Switch(expected_block @ ast::Switch{cases: expected, ..})))
-                => {
-                    for (content, expected) in content.iter().zip(expected.iter()) {
-                        let ((content_expr, content), (expected_expr, expected)) = (content, expected);
-                        assert_eq!(content_expr, expected_expr);
+    fn match_expression<'test>(expression: Option<&'test ast::Expression>, expected: Option<&'test ast::Expression>, unparsed: &'test str) -> bool {
+        match (expression, expected) { 
+            //TODO: (Some(ast::Expression::Literal( crate::types::Value)), Some(ast::Expression::Literal( crate::types::Value))) => {},
+            //TODO: (Some(ast::Expression::Constant(crate::types::Value)), Some(ast::Expression::Constant(crate::types::Value))) => {},
+            //TODO: (Some(ast::Expression::Variable), Some(ast::Expression::Variable) => {},
+            //TODO: (Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>)), Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>))) => {},
+            //TODO: (Some(ast::Expression::BinOp(  ast::Operation), Some(Box<ast::Expression>), Some(Box<ast::Expression>)), Some(ast::Expression::BinOp(ast::Operation), Some(Box<ast::Expression>), Some(Box<ast::Expression>))
 
-                        for (content, expected) in content.iter().zip(expected.iter()) {
-                            matches( Some(content), Some(expected), unparsed);
-                        }
-                    }
+            ( Some(expression), Some(expected) ) => match (expression, expected) {
+                  (ast::Expression::Literal(_),    ast::Expression::Literal(_),    )
+                | (ast::Expression::Constant(_),   ast::Expression::Constant(_),   )
+                | (ast::Expression::Variable,      ast::Expression::Variable,      )
+                | (ast::Expression::UnaryOp(_, _), ast::Expression::UnaryOp(_, _), )
+                | (ast::Expression::BinOp(_, _, _),ast::Expression::BinOp(_, _, _),)
+                 => {},
 
-                    match (&content_block.default, &expected_block.default){
-                        (Some(content), Some(expected)) => { 
-                            for (content, expected) in content.iter().zip(expected.iter()) {
-                                matches( Some(content), Some(expected), unparsed);
-                            }
-                        },
-                        (None, None) => {},
+                (expression, expected) => {panic!("Content parsed incorrectly!\nParsed expression:   {:?}\nExpected expression: {:?}", expression, expected) },
+            }
 
-                        (Some(_content), None) => { panic!("Did not expect a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
-                        (None, Some(_expected)) => { panic!("Expected a default clause in block!\nParsed:   {:?}\nExpected: {:?}", content_block, expected_block) },
-                    }
-                },
+            ( None, Some(expected) ) => {
+                panic!("Expected expression but input left unparsed!\nExpected expression: {:?}\nUnparsed input:   {:?}", expected, unparsed);
+            },
+            ( Some(expression), None ) => {
+                panic!("Expected end of input but found expression!\nParsed expression: {:?}\nUnparsed text:  {:?}", expression, unparsed);
+            },
+            ( None, None ) => { return false; },
+        };
+        
+        true
+    }
+    #[test]
+    fn parse_expressions() -> Result<(), Box<dyn std::error::Error>> {
+        let mut expected = vec![
+            ast::Expression::Literal(crate::types::Value::Integer),
+            ast::Expression::Literal(crate::types::Value::Decimal),
+            ast::Expression::Literal(crate::types::Value::String),
+            ast::Expression::Literal(crate::types::Value::Bool),
+            ast::Expression::Literal(crate::types::Value::Bool),
+        ];
+        
+        let input = include_str!("../tests/content.ink");
+        while let (input, (expression, _spaces)) = (ast::Expression::parse, multispace0).parse(input)? {
+            let expected = expected.remove(0);
+            match_expression(Some(&expression), Some(&expected), &input);
+            //println!("Parsed:   {:?}\nExpected: {:?}\n----", expression, expected);
 
-                ( Some(content), Some(expected) ) => match (content, expected) {
-                      (ast::Content::Logic(_),       ast::Content::Logic(_)      )
-                    | (ast::Content::Evaluation(_),  ast::Content::Evaluation(_) )
-                    | (ast::Content::Alternative(_), ast::Content::Alternative(_))
-                    | (ast::Content::Conditional(_), ast::Content::Conditional(_))
-                    | (ast::Content::Switch(_),      ast::Content::Switch(_)     )
-                    | (ast::Content::Branch(_),      ast::Content::Branch(_)     )
-                    | (ast::Content::Text(_),        ast::Content::Text(_)       )
-                    | (ast::Content::Newline,        ast::Content::Newline       ) => {},
-
-                    (content, expected) => {panic!("Content parsed incorrectly!\nParsed content:   {:?}\nExpected content: {:?}", content, expected) },
-                }
-
-                ( None, Some(expected) ) => {
-                    panic!("Expected content but input left unparsed!\nExpected content: {:?}\nUnparsed input:   {:?}", expected, unparsed);
-                },
-                ( Some(content), None ) => {
-                    panic!("Expected end of input but found content!\nParsed content: {:?}\nUnparsed text:  {:?}", content, unparsed);
-                },
-                ( None, None ) => { return false; },
-            };
-            
-            true
+            if eof::<&str, nom::error::Error<&str>>.parse(input).is_ok() { break; }
         }
-
-        while matches( (&content.next()).into(), (&expected.next()).into(), &unparsed) {};
 
         Ok(())
     }
