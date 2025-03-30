@@ -578,7 +578,26 @@ impl<I> Parse<I> for ast::Conditional<I> where
                     |(_, content)| content,
             )),
             multispace0
-        ).parse(input)?;
+        ).or((
+            map(
+                (
+                    success(()),
+                    (
+                        map(((space0), ast::Expression::parse, (space0, tag(":"))), |(_, expr, _)|expr),
+                        map_parser(is_not("\n{}"), many1(ast::Content::parse)),
+                    ),
+                ),
+                |(cmp, cases)|(cmp, vec![cases]),
+            ),
+            opt( map( 
+                    (
+                        tag("|"),
+                        map_parser(is_not("\n{}"), many1(ast::Content::parse)),
+                    ),
+                    |(_, content)| content,
+            )),
+            space0
+        )).parse(input)?;
 
         let switch = ast::Conditional{ 
             cases,

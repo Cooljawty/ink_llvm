@@ -18,4 +18,8 @@ Text with switch {cond:
 - else: False
 }.
 
-Text with {cond: True!}.
+Text with conditional block {
+- cond: True!
+- else: False
+}.
+Text with conditional {cond: True!}.
