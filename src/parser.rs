@@ -1138,7 +1138,7 @@ mod tests {
             ast::Expression::Literal(crate::types::Value::Bool(false)),
         ];
         
-        let input = include_str!("../tests/content.ink");
+        let input = include_str!("../tests/expressions.ink");
         while let (input, (expression, _spaces)) = (ast::Expression::parse, multispace0).parse(input)? {
             let expected = expected.remove(0);
             match_expression(Some(&expression), Some(&expected), &input);
