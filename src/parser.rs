@@ -826,11 +826,11 @@ impl ast::Operation
             Self::Negate | Self::Not => 1<<0,
 
             Self::Equal | Self::NotEqual | Self::Contains => 1<<1,
-            Self::Add | Self::Subtract => 1<<1,
+            Self::Add | Self::Subtract => 1<<2,
 
-            Self::Multiply | Self::Divide | Self::Mod => 1<<2,
+            Self::Multiply | Self::Divide | Self::Mod => 1<<3,
 
-            Self::And | Self::Or  => 1<<3,
+            Self::And | Self::Or  => 1<<4,
         }
     }
 }
