@@ -171,7 +171,7 @@ pub enum Expression  {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, PartialEq, Debug,)]
+#[derive(Copy, Clone, PartialEq, Debug,)]
 pub enum Operation {
     ///Logical:
     And,

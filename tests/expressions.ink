@@ -5,14 +5,10 @@
 delimited"
 true false
 
--> knot
--> tunnel -> to -> knot
-<- thread
-
-list.value
-
+- a
 a - b
 -a - b
+//TODO: parse rest of test
 a - b * 2 == a - (b * 2)
 a * b - 2 == (a * b) - 2
 
@@ -23,6 +19,7 @@ a and not b == a && !b
 
 VAR var = true
 temp temp_var = false
+var = 2 + a
 
 CONST integer = 401
 CONST decimal = 4.1
@@ -33,4 +30,10 @@ CONST divert = -> knot
 CONST tunnel = -> tunnel -> to -> knot
 
 CONST = list.value
+
+-> knot
+-> tunnel -> to -> knot
+<- thread
+
+list.value
 

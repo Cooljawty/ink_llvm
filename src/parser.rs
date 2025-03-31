@@ -678,7 +678,11 @@ where
         use std::str::FromStr;
         let int_parser = recognize((opt(tag("-")), digit1));
         let float_parser = recognize((opt(tag("-")), digit1, tag("."), digit1));
-        alt((
+
+        println!("Parsing Expression");
+        print_nom_input!(input);
+
+        let (rem, expr): (I, Self) = alt((
             //String Expression
             map(
                 (
@@ -709,10 +713,106 @@ where
             value(ast::Expression::Literal(Value::Bool(true)), tag("true")),
             value(ast::Expression::Literal(Value::Bool(false)), tag("false")),
 
+            //Operations
+            //TODO: fix unary op precedence
+            map(
+                (
+                    alt((
+                        value(ast::Operation::Not, alt((tag("not"), tag("!")))),
+                        value(ast::Operation::Negate, tag("-")),
+                    )), 
+                    space0, 
+                    ast::Expression::parse
+                ),
+                |(op, _, expr)|ast::Expression::UnaryOp(op, Box::new(expr)),
+            ),
+
             //Variable
             map(identifier, |name| ast::Expression::Variable(name)),
 
-        )).parse(input) 
+        )).parse(input)?;
+
+
+        let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
+            let (rem, right) = ast::Expression::parse_binop(rem, op)?;
+
+            (rem, ast::Expression::BinOp(op, Box::new(expr), Box::new(right)) )
+        } else { (rem, expr) };
+
+        print_nom_input!(rem);
+        println!("End Expression");
+
+        Ok((rem, expr))
+    }
+}
+
+impl ast::Expression 
+{
+    fn parse_binop<I>(input: I, root_op: ast::Operation) -> IResult<I, Self>  
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        println!("Parsing Binop");
+        print_nom_input!(input);
+
+        let (rem, left) = ast::Expression::parse(input)?;
+
+        let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
+            if op.precedence() < root_op.precedence() {
+                let(rem, right) = ast::Expression::parse_binop(rem, op)?;
+                (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
+            } else {
+                let(rem, right) = ast::Expression::parse(rem)?;
+                (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
+            }
+        } else {
+            (rem, left)
+        };
+
+        print_nom_input!(rem);
+        println!("End Binop");
+
+        Ok(( rem, expr ))
+    }
+}
+
+impl<I> Parse<I> for ast::Operation 
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    fn parse(input: I) -> IResult<I, Self>  
+    { 
+        alt((
+            value(ast::Operation::And, alt((tag("and"), tag("&&")))),
+            value(ast::Operation::Or, alt((tag("or"), tag("||")))),
+
+            value(ast::Operation::Equal, tag("==")),
+            value(ast::Operation::NotEqual, tag("!=")),
+            value(ast::Operation::Contains, tag("?")),
+
+            value(ast::Operation::Add, tag("+")),
+            value(ast::Operation::Subtract, tag("-")),
+            value(ast::Operation::Multiply, tag("*")),
+            value(ast::Operation::Divide, tag("/")),
+            value(ast::Operation::Mod, alt((tag("mod"), tag("%")))),
+        )).parse(input)
+    }
+}
+impl ast::Operation
+{
+    fn precedence(&self) -> usize  
+    { 
+        match self {
+            Self::Add | Self::Subtract => 0,
+            Self::Multiply | Self::Divide | Self::Mod => 1,
+            Self::And | Self::Or | Self::Not => 2,
+            Self::Equal | Self::NotEqual | Self::Contains => 3,
+            Self::Negate => todo!(),
+        }
     }
 }
 
