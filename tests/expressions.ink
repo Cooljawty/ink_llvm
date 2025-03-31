@@ -8,8 +8,9 @@ true false
 - a
 a - b
 -a - b
+a - b * 2
 //TODO: parse rest of test
-a - b * 2 == a - (b * 2)
+== a - (b * 2)
 a * b - 2 == (a * b) - 2
 
 not a

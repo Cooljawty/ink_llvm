@@ -682,6 +682,14 @@ where
         println!("Parsing Expression");
         print_nom_input!(input);
 
+        let (rem, (unary_op, _)) = (
+            opt( alt((
+                value(ast::Operation::Not, alt((tag("not"), tag("!")))),
+                value(ast::Operation::Negate, tag("-")),
+            ))),
+            space0,
+        ).parse(input)?;
+
         let (rem, expr): (I, Self) = alt((
             //String Expression
             map(
@@ -692,7 +700,7 @@ where
                     )),
                     tag("\"")
                 ),
-                |(_, string, _)|ast::Expression::Literal(Value::String(collect_input(string))),
+                |(_, string, _)|Self::Literal(Value::String(collect_input(string))),
             ),
 
             //Numbers (Integers and decimals)
@@ -700,43 +708,35 @@ where
                 map_res(float_parser, |num: I| {
                     f32::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
                 }),
-                |num| ast::Expression::Literal(Value::Decimal(num))
+                |num| Self::Literal(Value::Decimal(num))
             ),
             map(
                 map_res(int_parser, |num: I| {
                     isize::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
                 }),
-                |num| ast::Expression::Literal(Value::Integer(num))
+                |num| Self::Literal(Value::Integer(num))
             ),
             
             //Boolean 
-            value(ast::Expression::Literal(Value::Bool(true)), tag("true")),
-            value(ast::Expression::Literal(Value::Bool(false)), tag("false")),
-
-            //Operations
-            //TODO: fix unary op precedence
-            map(
-                (
-                    alt((
-                        value(ast::Operation::Not, alt((tag("not"), tag("!")))),
-                        value(ast::Operation::Negate, tag("-")),
-                    )), 
-                    space0, 
-                    ast::Expression::parse
-                ),
-                |(op, _, expr)|ast::Expression::UnaryOp(op, Box::new(expr)),
-            ),
+            value(Self::Literal(Value::Bool(true)), tag("true")),
+            value(Self::Literal(Value::Bool(false)), tag("false")),
 
             //Variable
-            map(identifier, |name| ast::Expression::Variable(name)),
+            map(identifier, |name| Self::Variable(name)),
 
-        )).parse(input)?;
+        )).parse(rem)?;
 
+        let expr = if let Some(op) = unary_op {
+            Self::UnaryOp(op, Box::new(expr))
+        } else {
+            expr
+        };
 
         let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
-            let (rem, right) = ast::Expression::parse_binop(rem, op)?;
-            ( rem, ast::Expression::BinOp(op, Box::new(expr), Box::new(right)) )
-        } else { (rem, expr) };
+            Self::parse_binop(rem, op, expr)?
+        } else {
+            (rem, expr)
+        };
 
         print_nom_input!(rem);
         println!("End Expression");
@@ -747,7 +747,7 @@ where
 
 impl ast::Expression 
 {
-    fn parse_binop<I>(input: I, root_op: ast::Operation) -> IResult<I, Self>  
+    fn parse_binop<I>(input: I, root_op: ast::Operation, left_expr: ast::Expression) -> IResult<I, Self>  
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -756,18 +756,28 @@ impl ast::Expression
         println!("Parsing Binop");
         print_nom_input!(input);
 
-        let (rem, left) = ast::Expression::parse(input)?;
+        let (rem, right_expr) = Self::parse(input)?;
 
-        let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
-            let (rem, right) = if op.precedence() < root_op.precedence() {
-                ast::Expression::parse_binop(rem, op)?
-            } else {
-                ast::Expression::parse(rem)?
-            };
+        let expr = match right_expr {
+            Self::BinOp(right_op, right_expr_left, right_expr_right)
+            if right_op.precedence() < root_op.precedence() => {
+                //Tree swap!!
+                Self::BinOp(
+                    right_op,
+                    Box::new(
+                        Self::BinOp(
+                            root_op,
+                            Box::new(left_expr),
+                            right_expr_left,
+                        ),
+                    ),
+                    right_expr_right,
+                )
+            },
 
-            (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
-        } else {
-            (rem, left)
+            right_expr => {
+                Self::BinOp(root_op, Box::new(left_expr), Box::new(right_expr))
+            },
         };
 
         print_nom_input!(rem);
@@ -788,6 +798,7 @@ where
         alt((
             value(ast::Operation::And, alt((tag("and"), tag("&&")))),
             value(ast::Operation::Or, alt((tag("or"), tag("||")))),
+            value(ast::Operation::Not, alt((tag("not"), tag("!")))),
 
             value(ast::Operation::Equal, tag("==")),
             value(ast::Operation::NotEqual, tag("!=")),
@@ -798,6 +809,9 @@ where
             value(ast::Operation::Multiply, tag("*")),
             value(ast::Operation::Divide, tag("/")),
             value(ast::Operation::Mod, alt((tag("mod"), tag("%")))),
+
+            //See ast::Expression::parse for unary negation
+            //value(ast::Operation::Negate, tag("-")),
         )).parse(input)
     }
 }
@@ -806,11 +820,11 @@ impl ast::Operation
     fn precedence(&self) -> usize  
     { 
         match self {
-            Self::Add | Self::Subtract => 0,
-            Self::Multiply | Self::Divide | Self::Mod => 1,
-            Self::And | Self::Or | Self::Not => 2,
-            Self::Equal | Self::NotEqual | Self::Contains => 3,
-            Self::Negate => todo!(),
+            Self::Add | Self::Subtract => 1<<1,
+            Self::Multiply | Self::Divide | Self::Mod => 1<<2,
+            Self::And | Self::Or  => 1<<3,
+            Self::Equal | Self::NotEqual | Self::Contains => 1<<4,
+            Self::Negate | Self::Not => 1<<0,
         }
     }
 }
@@ -1293,18 +1307,47 @@ mod tests {
     #[test]
     fn parse_expressions() -> Result<(), Box<dyn std::error::Error>> {
         use crate::types::Value;
+        use ast::{Expression, Operation};
         let expected = vec![
-            ast::Expression::Literal(Value::Integer(401)),
-            ast::Expression::Literal(Value::Decimal(4.1)),
-            ast::Expression::Literal(Value::String("string".to_string())),
-            ast::Expression::Literal(Value::String("string\\\ndelimited".to_string())),
-            ast::Expression::Literal(Value::Bool(true)),
-            ast::Expression::Literal(Value::Bool(false)),
+            Expression::Literal(Value::Integer(401)),
+            Expression::Literal(Value::Decimal(4.1)),
+            Expression::Literal(Value::String("string".to_string())),
+            Expression::Literal(Value::String("string\\\ndelimited".to_string())),
+            Expression::Literal(Value::Bool(true)),
+            Expression::Literal(Value::Bool(false)),
+
+            Expression::UnaryOp( Operation::Negate, Box::new(Expression::Variable("a".to_string()) )),
+            Expression::BinOp( 
+                Operation::Subtract,
+                Box::new(Expression::Variable("a".to_string()) ),
+                Box::new(Expression::Variable("b".to_string()) ),
+            ),
+            Expression::BinOp( 
+                Operation::Subtract,
+                Box::new(
+                    Expression::UnaryOp(
+                        Operation::Negate,
+                        Box::new(Expression::Variable("a".to_string())),
+                    )
+                ),
+                Box::new(Expression::Variable("b".to_string()) ),
+            ),
+            Expression::BinOp( 
+                Operation::Subtract,
+                Box::new(Expression::Variable("a".to_string()) ),
+                Box::new(
+                    Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("b".to_string())),
+                        Box::new(Expression::Literal(Value::Integer(2))),
+                    )
+                ),
+            ),
         ];
         
         let (unparsed, expressions) = nom::multi::many1(
             map(
-                (complete(ast::Expression::parse), multispace0),
+                (complete(Expression::parse), multispace0),
                 |(expression, _)|expression,
             )
         ).parse(include_str!("../tests/expressions.ink"))?;
