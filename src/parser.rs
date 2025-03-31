@@ -735,8 +735,7 @@ where
 
         let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
             let (rem, right) = ast::Expression::parse_binop(rem, op)?;
-
-            (rem, ast::Expression::BinOp(op, Box::new(expr), Box::new(right)) )
+            ( rem, ast::Expression::BinOp(op, Box::new(expr), Box::new(right)) )
         } else { (rem, expr) };
 
         print_nom_input!(rem);
@@ -760,13 +759,13 @@ impl ast::Expression
         let (rem, left) = ast::Expression::parse(input)?;
 
         let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
-            if op.precedence() < root_op.precedence() {
-                let(rem, right) = ast::Expression::parse_binop(rem, op)?;
-                (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
+            let (rem, right) = if op.precedence() < root_op.precedence() {
+                ast::Expression::parse_binop(rem, op)?
             } else {
-                let(rem, right) = ast::Expression::parse(rem)?;
-                (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
-            }
+                ast::Expression::parse(rem)?
+            };
+
+            (rem, ast::Expression::BinOp(op, Box::new(left), Box::new(right)) )
         } else {
             (rem, left)
         };
