@@ -691,6 +691,9 @@ where
         ).parse(input)?;
 
         let (rem, expr): (I, Self) = alt((
+            //Parens
+            delimited( tag("("), Self::parse, tag(")") ),
+
             //String Expression
             map(
                 (
@@ -820,11 +823,14 @@ impl ast::Operation
     fn precedence(&self) -> usize  
     { 
         match self {
-            Self::Add | Self::Subtract => 1<<1,
-            Self::Multiply | Self::Divide | Self::Mod => 1<<2,
-            Self::And | Self::Or  => 1<<3,
-            Self::Equal | Self::NotEqual | Self::Contains => 1<<4,
             Self::Negate | Self::Not => 1<<0,
+
+            Self::Equal | Self::NotEqual | Self::Contains => 1<<1,
+            Self::Add | Self::Subtract => 1<<1,
+
+            Self::Multiply | Self::Divide | Self::Mod => 1<<2,
+
+            Self::And | Self::Or  => 1<<3,
         }
     }
 }
@@ -1260,7 +1266,10 @@ mod tests {
 
     fn match_expression<'test>(expression: Option<&'test ast::Expression>, expected: Option<&'test ast::Expression>, unparsed: &'test str) -> bool {
         match (expression, expected) { 
-            (Some(expression @ ast::Expression::Literal(value)), Some(expected_expression @ ast::Expression::Literal(expected))) => {
+            (
+                Some(expression @ ast::Expression::Literal(value)),
+                Some(expected_expression @ ast::Expression::Literal(expected))
+            ) => {
                 use crate::types::Value;
                 match (value, expected) {
                     (Value::Integer(value), Value::Integer(expected)) => { assert_eq!(value, expected) },
@@ -1278,9 +1287,38 @@ mod tests {
                 }
             },
             //TODO: (Some(ast::Expression::Constant(crate::types::Value)), Some(ast::Expression::Constant(crate::types::Value))) => {},
-            //TODO: (Some(ast::Expression::Variable), Some(ast::Expression::Variable) => {},
-            //TODO: (Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>)), Some(ast::Expression::UnaryOp(ast::Operation), Some(Box<ast::Expression>))) => {},
-            //TODO: (Some(ast::Expression::BinOp(  ast::Operation), Some(Box<ast::Expression>), Some(Box<ast::Expression>)), Some(ast::Expression::BinOp(ast::Operation), Some(Box<ast::Expression>), Some(Box<ast::Expression>))
+            (
+                Some(expression @ ast::Expression::Variable(name)),
+                Some(expected_expression @ ast::Expression::Variable(expected_name)),
+            ) => {
+                assert!(name == expected_name,
+                    "Mis-matched variables!\nParsed expression:   {:?}\nExpected expression: {:?}",
+                    expression, expected_expression
+                );
+            }
+            (
+                Some(expression @ ast::Expression::UnaryOp(op, inner)),
+                Some(expected_expression @ ast::Expression::UnaryOp(expected_op, expected_inner))
+            ) => {
+                assert!(op == expected_op,
+                    "Mis-matched operation for unary operation!\nParsed expression:   {:?}\nExpected expression: {:?}",
+                    expression, expected_expression
+                );
+
+                match_expression(Some(&inner), Some(&expected_inner), unparsed);
+            },
+            (
+                Some(expression @ ast::Expression::BinOp(op, left, right)),
+                Some(expected_expression @ ast::Expression::BinOp(expected_op, expected_left, expected_right)),
+            ) => {
+                assert!(op == expected_op,
+                    "Mis-matched operation for binary operation!\nParsed expression:   {:?}\nExpected expression: {:?}",
+                    expression, expected_expression
+                );
+
+                match_expression(Some(&left), Some(&expected_left), unparsed);
+                match_expression(Some(&right), Some(&expected_right), unparsed);
+            },
 
             ( Some(expression), Some(expected) ) => match (expression, expected) {
                   (ast::Expression::Literal(_),    ast::Expression::Literal(_),    )
@@ -1324,25 +1362,41 @@ mod tests {
             ),
             Expression::BinOp( 
                 Operation::Subtract,
-                Box::new(
-                    Expression::UnaryOp(
-                        Operation::Negate,
-                        Box::new(Expression::Variable("a".to_string())),
-                    )
-                ),
+                Box::new(Expression::UnaryOp(
+                    Operation::Negate,
+                    Box::new(Expression::Variable("a".to_string())),
+                )),
                 Box::new(Expression::Variable("b".to_string()) ),
             ),
+            Expression::UnaryOp(
+                Operation::Negate,
+                Box::new(Expression::BinOp(
+                    Operation::Subtract,
+                    Box::new(Expression::Variable("a".to_string())),
+                    Box::new(Expression::Variable("b".to_string())),
+                )),
+            ),
             Expression::BinOp( 
-                Operation::Subtract,
-                Box::new(Expression::Variable("a".to_string()) ),
-                Box::new(
-                    Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::BinOp(
                         Operation::Multiply,
                         Box::new(Expression::Variable("b".to_string())),
                         Box::new(Expression::Literal(Value::Integer(2))),
-                    )
-                ),
-            ),
+                    )),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("b".to_string())),
+                        Box::new(Expression::Literal(Value::Integer(2))),
+                    )),
+                )),
+            )
         ];
         
         let (unparsed, expressions) = nom::multi::many1(
