@@ -673,75 +673,20 @@ where
 {
     fn parse(input: I) -> IResult<I, Self>  
     { 
-        use crate::types::Value;
-
-        use std::str::FromStr;
-        let int_parser = recognize((opt(tag("-")), digit1));
-        let float_parser = recognize((opt(tag("-")), digit1, tag("."), digit1));
-
         println!("Parsing Expression");
         print_nom_input!(input);
 
-        let (rem, (unary_op, _)) = (
-            opt( alt((
-                value(ast::Operation::Not, alt((tag("not"), tag("!")))),
-                value(ast::Operation::Negate, tag("-")),
-            ))),
-            space0,
-        ).parse(input)?;
+        let (rem, (expr, _)) = (Self::parse_primary, space0).parse(input)?;
 
-        let (rem, expr): (I, Self) = alt((
-            //Parens
-            delimited( tag("("), Self::parse, tag(")") ),
 
-            //String Expression
-            map(
-                (
-                    tag("\""), 
-                    recognize(many0(
-                        |input| ast::Content::parse_text(input, "\\\n{}\"")
-                    )),
-                    tag("\"")
-                ),
-                |(_, string, _)|Self::Literal(Value::String(collect_input(string))),
-            ),
-
-            //Numbers (Integers and decimals)
-            map(
-                map_res(float_parser, |num: I| {
-                    f32::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
-                }),
-                |num| Self::Literal(Value::Decimal(num))
-            ),
-            map(
-                map_res(int_parser, |num: I| {
-                    isize::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
-                }),
-                |num| Self::Literal(Value::Integer(num))
-            ),
-            
-            //Boolean 
-            value(Self::Literal(Value::Bool(true)), tag("true")),
-            value(Self::Literal(Value::Bool(false)), tag("false")),
-
-            //Variable
-            map(identifier, |name| Self::Variable(name)),
-
-        )).parse(rem)?;
-
-        let expr = if let Some(op) = unary_op {
-            Self::UnaryOp(op, Box::new(expr))
-        } else {
-            expr
-        };
-
-        let (rem, expr) = if let Ok((rem, (_, op, _))) = ( space0, ast::Operation::parse, space0 ).parse(rem.clone()) {
-            Self::parse_binop(rem, op, expr)?
+        let (rem, expr) = if let (input, Some(_op)) = (opt(peek(ast::Operation::parse))).parse(rem.clone())? {
+             Self::parse_binop(input, 0, expr)?
         } else {
             (rem, expr)
         };
 
         print_nom_input!(rem);
+        //println!("\n{:#?}\n", expr);
         println!("End Expression");
 
         Ok((rem, expr))
@@ -750,43 +695,137 @@ where
 
 impl ast::Expression 
 {
-    fn parse_binop<I>(input: I, root_op: ast::Operation, left_expr: ast::Expression) -> IResult<I, Self>  
+    fn parse_primary<I>(input: I) -> IResult<I, Self>  
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
         <I as nom::Input>::Item: nom::AsChar,
         for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
     { 
-        println!("Parsing Binop");
-        print_nom_input!(input);
+        use crate::types::Value;
 
-        let (rem, right_expr) = Self::parse(input)?;
+        use std::str::FromStr;
+        let int_parser = recognize((opt(tag("-")), digit1));
+        let float_parser = recognize((opt(tag("-")), digit1, tag("."), digit1));
 
-        let expr = match right_expr {
-            Self::BinOp(right_op, right_expr_left, right_expr_right)
-            if right_op.precedence() < root_op.precedence() => {
-                //Tree swap!!
-                Self::BinOp(
-                    right_op,
-                    Box::new(
-                        Self::BinOp(
-                            root_op,
-                            Box::new(left_expr),
-                            right_expr_left,
-                        ),
+        map((
+            opt( alt((
+                value(ast::Operation::Not, alt((tag("not"), tag("!")))),
+                value(ast::Operation::Negate, tag("-")),
+            ))),
+
+            space0,
+
+            alt((
+                //Parens
+                delimited( tag("("), Self::parse, tag(")") ),
+
+                //String Expression
+                map(
+                    (
+                        tag("\""), 
+                        recognize(many0(
+                            |input| ast::Content::parse_text(input, "\\\n{}\"")
+                        )),
+                        tag("\"")
                     ),
-                    right_expr_right,
-                )
-            },
+                    |(_, string, _)|Self::Literal(Value::String(collect_input(string))),
+                ),
 
-            right_expr => {
-                Self::BinOp(root_op, Box::new(left_expr), Box::new(right_expr))
-            },
-        };
+                //Numbers (Integers and decimals)
+                map(
+                    map_res(float_parser, |num: I| {
+                        f32::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
+                    }),
+                    |num| Self::Literal(Value::Decimal(num))
+                ),
+                map(
+                    map_res(int_parser, |num: I| {
+                        isize::from_str(num.iter_elements().map(|c| c.as_char()).collect::<String>().as_str())
+                    }),
+                    |num| Self::Literal(Value::Integer(num))
+                ),
+                
+                //Boolean 
+                value(Self::Literal(Value::Bool(true)), tag("true")),
+                value(Self::Literal(Value::Bool(false)), tag("false")),
 
-        print_nom_input!(rem);
+                //Variable
+                map(identifier, |name| Self::Variable(name)),
+
+            )),
+            ),
+            |(unary_op, _, expr)| match unary_op {
+                Some(unary_op) => Self::UnaryOp(unary_op, Box::new(expr)),
+                None => expr,
+            },
+        ).parse(input)
+    }
+
+    fn parse_binop<I>(mut input: I, min_precedence: usize, left_expr: ast::Expression) -> IResult<I, Self>  
+    where
+        for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+        <I as nom::Input>::Item: nom::AsChar,
+        for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+    { 
+        use ast::Operation;
+
+        println!("Parsing Binop");
+        //print_nom_input!(input);
+
+        let mut expr = left_expr;
+
+        while let Ok(( rem, _right_op )) = verify(
+            peek(Operation::parse),
+            |right_op| Self::check_right_op(*right_op, min_precedence),
+        ).parse(input.clone()) {
+            let (rem, (root_op, _, mut right_expr, _)) = (Operation::parse, space0, Self::parse_primary, space0).parse(rem)?;
+            input = rem;
+
+            //Right term = Higher precedence operation
+            while let Ok((rem, right_op)) = verify(
+                peek(Operation::parse),
+                |right_op| Self::check_right_op(*right_op, root_op.precedence()),
+            ).parse(input.clone()) {
+                let (rem, nested_expr) = Self::parse_binop(rem, right_op.precedence(), right_expr)?;
+                input = rem;
+                right_expr = nested_expr;
+            } 
+
+            expr = Self::BinOp(
+                root_op,
+                Box::new(expr),
+                Box::new(right_expr),
+            )
+        }
+
+        //print_nom_input!(rem);
         println!("End Binop");
 
-        Ok(( rem, expr ))
+        Ok(( input, expr ))
+    }
+
+    fn check_right_op(op: ast::Operation, precedence: usize) -> bool {
+        use ast::Operation;
+
+        match op {
+            //Infix operations
+              Operation::And | Operation::Or
+            | Operation::Equal | Operation::NotEqual
+            | Operation::Contains
+            | Operation::Add | Operation::Subtract 
+            | Operation::Multiply | Operation::Divide | Operation::Mod 
+            if op.precedence() > precedence => true,
+
+            //Right associative operation chain
+              Operation::And | Operation::Or
+            | Operation::Equal | Operation::NotEqual
+            | Operation::Contains
+            | Operation::Add | Operation::Subtract 
+            | Operation::Multiply | Operation::Divide | Operation::Mod 
+            if op.precedence() == precedence => true,
+
+            _ => false,
+        }
     }
 }
 
@@ -822,15 +861,21 @@ impl ast::Operation
 {
     fn precedence(&self) -> usize  
     { 
+        //Precedence taken from ink/compiler/InkParser/InkParser_Expressions.cs
         match self {
-            Self::Negate | Self::Not => 1<<0,
+            Self::Negate | Self::Not => 0,
 
-            Self::Equal | Self::NotEqual | Self::Contains => 1<<1,
-            Self::Add | Self::Subtract => 1<<2,
+            Self::Or | Self::And  => 1,
 
-            Self::Multiply | Self::Divide | Self::Mod => 1<<3,
+            Self::Equal | Self::NotEqual => 2,
 
-            Self::And | Self::Or  => 1<<4,
+            Self::Contains => 3,
+
+            Self::Add => 4,
+            Self::Subtract => 5,
+            Self::Multiply => 6,
+            Self::Divide => 7,
+            Self::Mod => 8,
         }
     }
 }
@@ -1396,7 +1441,100 @@ mod tests {
                         Box::new(Expression::Literal(Value::Integer(2))),
                     )),
                 )),
-            )
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Literal(Value::Integer(2))),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Literal(Value::Integer(2))),
+                )),
+            ),
+
+            Expression::UnaryOp( 
+                Operation::Not,
+                Box::new(Expression::Variable("a".to_string()))
+            ),
+            Expression::BinOp(
+                Operation::Or,
+                Box::new(Expression::Variable("a".to_string()) ),
+                Box::new(Expression::Variable("b".to_string())),
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::And,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::Variable("b".to_string())),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::And,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::Variable("b".to_string())),
+                )),
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::And,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::UnaryOp( 
+                        Operation::Not, 
+                        Box::new(Expression::Variable("b".to_string()))
+                    )),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::And,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::UnaryOp( 
+                        Operation::Not, 
+                        Box::new(Expression::Variable("b".to_string()))
+                    )),
+                )),
+            ),
+
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp(
+                    Operation::Or,
+                    Box::new(Expression::BinOp( 
+                        Operation::Equal,
+                        Box::new(Expression::BinOp( 
+                            Operation::Add,
+                            Box::new(Expression::Variable("a".to_string())),
+                            Box::new(Expression::Variable("b".to_string())),
+                        )),
+                        Box::new(Expression::Literal(Value::Integer(1))),
+                    )),
+                    Box::new(Expression::Variable("c".to_string())),
+                )),
+                Box::new(Expression::BinOp(
+                    Operation::Or,
+                    Box::new(Expression::BinOp( 
+                        Operation::Equal,
+                        Box::new(Expression::BinOp( 
+                            Operation::Add,
+                            Box::new(Expression::Variable("a".to_string())),
+                            Box::new(Expression::Variable("b".to_string())),
+                        )),
+                        Box::new(Expression::Literal(Value::Integer(1))),
+                    )),
+                    Box::new(Expression::Variable("c".to_string())),
+                )),
+            ),
         ];
         
         let (unparsed, expressions) = nom::multi::many1(

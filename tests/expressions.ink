@@ -12,12 +12,14 @@ a - b
 a - b * 2 == a - (b * 2)
 a * b - 2 == (a * b) - 2
 
-//TODO: parse rest of test
 not a
 a or b
-a and b == a && b
-a and not b == a && !b
+(a and b) == (a && b)
+(a and not b) == (a && !b)
 
+(a + b == 1 or c) == ( (a + b == 1) or c)
+
+//TODO: parse rest of test
 VAR var = true
 temp temp_var = false
 var = 2 + a
