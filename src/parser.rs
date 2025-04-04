@@ -761,7 +761,7 @@ impl ast::Expression
         ).parse(input)
     }
 
-    fn parse_binop<I>(mut input: I, min_precedence: usize, left_expr: ast::Expression) -> IResult<I, Self>  
+    fn parse_binop<I>(mut input: I, min_precedence: usize, mut left_expr: ast::Expression) -> IResult<I, Self>  
     where
         for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
         <I as nom::Input>::Item: nom::AsChar,
@@ -771,8 +771,6 @@ impl ast::Expression
 
         println!("Parsing Binop");
         //print_nom_input!(input);
-
-        let mut expr = left_expr;
 
         while let Ok(( rem, _right_op )) = verify(
             peek(Operation::parse),
@@ -786,14 +784,14 @@ impl ast::Expression
                 peek(Operation::parse),
                 |right_op| Self::check_right_op(*right_op, root_op.precedence()),
             ).parse(input.clone()) {
-                let (rem, nested_expr) = Self::parse_binop(rem, right_op.precedence(), right_expr)?;
+                let (rem, nested_expr) = Self::parse_binop(rem, root_op.precedence(), right_expr)?;
                 input = rem;
                 right_expr = nested_expr;
             } 
 
-            expr = Self::BinOp(
+            left_expr = Self::BinOp(
                 root_op,
-                Box::new(expr),
+                Box::new(left_expr),
                 Box::new(right_expr),
             )
         }
@@ -801,7 +799,7 @@ impl ast::Expression
         //print_nom_input!(rem);
         println!("End Binop");
 
-        Ok(( input, expr ))
+        Ok(( input, left_expr ))
     }
 
     fn check_right_op(op: ast::Operation, precedence: usize) -> bool {
@@ -809,20 +807,22 @@ impl ast::Expression
 
         match op {
             //Infix operations
+            op @ (
               Operation::And | Operation::Or
             | Operation::Equal | Operation::NotEqual
             | Operation::Contains
             | Operation::Add | Operation::Subtract 
             | Operation::Multiply | Operation::Divide | Operation::Mod 
-            if op.precedence() > precedence => true,
+            ) if op.precedence() > precedence => true,
 
             //Right associative operation chain
+            op @ ( 
               Operation::And | Operation::Or
             | Operation::Equal | Operation::NotEqual
             | Operation::Contains
-            | Operation::Add | Operation::Subtract 
-            | Operation::Multiply | Operation::Divide | Operation::Mod 
-            if op.precedence() == precedence => true,
+            | Operation::Add
+            | Operation::Multiply
+            ) if op.precedence() == precedence => true,
 
             _ => false,
         }
@@ -1461,6 +1461,69 @@ mod tests {
                         Box::new(Expression::Variable("b".to_string())),
                     )),
                     Box::new(Expression::Literal(Value::Integer(2))),
+                )),
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::BinOp(
+                        Operation::Subtract,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Variable("c".to_string()) ),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::Subtract,
+                    Box::new(Expression::BinOp(
+                        Operation::Subtract,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Variable("c".to_string()) ),
+                )),
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::Divide,
+                    Box::new(Expression::BinOp(
+                        Operation::Divide,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Variable("c".to_string()) ),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::Divide,
+                    Box::new(Expression::BinOp(
+                        Operation::Divide,
+                        Box::new(Expression::Variable("a".to_string()) ),
+                        Box::new(Expression::Variable("b".to_string())),
+                    )),
+                    Box::new(Expression::Variable("c".to_string()) ),
+                )),
+            ),
+            Expression::BinOp(
+                Operation::Equal,
+                Box::new(Expression::BinOp( 
+                    Operation::Multiply,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("b".to_string())),
+                        Box::new(Expression::Variable("c".to_string()) ),
+                    )),
+                )),
+                Box::new(Expression::BinOp( 
+                    Operation::Multiply,
+                    Box::new(Expression::Variable("a".to_string()) ),
+                    Box::new(Expression::BinOp(
+                        Operation::Multiply,
+                        Box::new(Expression::Variable("b".to_string())),
+                        Box::new(Expression::Variable("c".to_string()) ),
+                    )),
                 )),
             ),
 

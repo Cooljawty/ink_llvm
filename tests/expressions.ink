@@ -9,8 +9,13 @@ true false
 a - b
 -a - b
 -(a - b)
+
+
 a - b * 2 == a - (b * 2)
 a * b - 2 == (a * b) - 2
+a - b - c == ( (a - b) - c )
+a / b / c == ( (a / b) / c )
+a * b * c == ( a * (b * c) )
 
 not a
 a or b
