@@ -384,24 +384,23 @@ where
         {
         }
         */
-        if      let Ok((rem, _block)) = peek(char::<I, nom::error::Error<I>>('{')).parse(input.clone()) { Self::parse_block(rem) }
-        else if let Ok((rem, _newline)) = many1(line_ending::<I, nom::error::Error<I>>).parse(input.clone()) { Ok( (rem, ast::Content::Newline) ) }
+        if      let Ok((rem, block)) = Self::parse_block(input.clone()) { Ok( (rem, block) ) }
+        else if let Ok((rem, newline)) = map(
+            many1(line_ending::<I, nom::error::Error<I>>),
+            |_|ast::Content::Newline,
+                ).parse(input.clone()) { Ok( (rem, newline) ) }
         else { Self::parse_text(input, "\\\n{}") }
     }
 
-    #[allow(dead_code)]
     fn parse_block(input: I) -> IResult<I, Self>
     {
-        let (rem, block) = delimited(
-            tag("{"), 
-            alt((
-                map(ast::Switch::parse,      |switch| Self::Switch(switch)), //TODO: Solve precedence issue
-                map(ast::Conditional::parse, |conditional| Self::Conditional(conditional)),
-                map(ast::Alternative::parse, |alternative| Self::Alternative(alternative)),
-                //TODO: map(ast::Expression::parse,  |expr| Self::Evaluation(expr)),
-            )),
-            tag("}")
-        ).parse(input)?;
+        let (rem, block) = alt((
+            map( delimited( tag("{"), ast::Switch::parse,      tag("}")), |switch| Self::Switch(switch)),
+            map( delimited( tag("{"), ast::Conditional::parse, tag("}")), |conditional| Self::Conditional(conditional)),
+            map( delimited( tag("{"), ast::Expression::parse,  tag("}")), |expr| Self::Evaluation(expr)),
+            map( delimited( tag("{"), ast::Alternative::parse, tag("}")), |alternative| Self::Alternative(alternative)),
+        )).parse(input)?;
+
         Ok((rem, block))
     }
 
@@ -673,9 +672,6 @@ where
 {
     fn parse(input: I) -> IResult<I, Self>  
     { 
-        println!("Parsing Expression");
-        print_nom_input!(input);
-
         let (rem, (expr, _)) = (Self::parse_primary, space0).parse(input)?;
 
 
@@ -684,10 +680,6 @@ where
         } else {
             (rem, expr)
         };
-
-        print_nom_input!(rem);
-        //println!("\n{:#?}\n", expr);
-        println!("End Expression");
 
         Ok((rem, expr))
     }
@@ -769,9 +761,6 @@ impl ast::Expression
     { 
         use ast::Operation;
 
-        println!("Parsing Binop");
-        //print_nom_input!(input);
-
         while let Ok(( rem, _right_op )) = verify(
             peek(Operation::parse),
             |right_op| Self::check_right_op(*right_op, min_precedence),
@@ -780,7 +769,7 @@ impl ast::Expression
             input = rem;
 
             //Right term = Higher precedence operation
-            while let Ok((rem, right_op)) = verify(
+            while let Ok((rem, _right_op)) = verify(
                 peek(Operation::parse),
                 |right_op| Self::check_right_op(*right_op, root_op.precedence()),
             ).parse(input.clone()) {
@@ -795,9 +784,6 @@ impl ast::Expression
                 Box::new(right_expr),
             )
         }
-
-        //print_nom_input!(rem);
-        println!("End Binop");
 
         Ok(( input, left_expr ))
     }
@@ -1136,6 +1122,10 @@ mod tests {
             ( Some(ast::Content::Text(text)), Some(ast::Content::Text(expected)) ) => {
                 assert!(text == expected, "invalid text content parse\nParsed:   {:?}\nExpected: {:?}", text, expected);
             }, 
+
+            ( Some(ast::Content::Evaluation(expression)), Some(ast::Content::Evaluation(expected)) ) => {
+                match_expression(Some(expression), Some(expected), unparsed);
+            }, 
             
             (Some(content_block @ ast::Content::Alternative(ast::Alternative{cases: content, ..})), Some(expected_block @ ast::Content::Alternative(ast::Alternative{cases: expected, ..})))
             => {
@@ -1226,80 +1216,97 @@ mod tests {
 
     #[test]
     fn parse_content() -> Result<(), Box<dyn std::error::Error>> {
-        let (unparsed, content) = nom::multi::many1(complete(ast::Content::parse)).parse(include_str!("../tests/content.ink"))?;
+        use ast::{Content, Alternative, AlternateType, Conditional, Switch, Expression, Operation};
+        use crate::types::Value;
+
+        let (unparsed, content) = nom::multi::many1(complete(Content::parse)).parse(include_str!("../tests/content.ink"))?;
 
         println!("Parsed: {:#?}", content);
         let mut content = content.into_iter();
         print_nom_input!(unparsed);
 
         let mut expected = [
-            ast::Content::Text("Line of text"), ast::Content::Newline,
+            Content::Text("Line of text"), Content::Newline,
 
-            ast::Content::Text("\tSecond line of text"), ast::Content::Newline,
+            Content::Text("\tSecond line of text"), Content::Newline,
 
-            ast::Content::Text("Text with delmited newline "), ast::Content::Text("continuing line"), ast::Content::Newline,
+            Content::Text("Text with delmited newline "), Content::Text("continuing line"), Content::Newline,
 
-            ast::Content::Text("Text with delemiter \\{ block \\}"), ast::Content::Newline,
+            Content::Text("Text with delemiter \\{ block \\}"), Content::Newline,
             
-            ast::Content::Text("Text with "), 
-            ast::Content::Alternative(ast::Alternative{
-                method: ast::AlternateType::Cycle, shuffle: false,
+            Content::Text("Text with "), 
+            Content::Alternative(Alternative{
+                method: AlternateType::Cycle, shuffle: false,
                 cases: HashMap::from([
-                    (0, vec![ast::Content::Text("cycling")]),
-                    (1, vec![ast::Content::Text("repeating")]),
-                    (2, vec![ast::Content::Text("alternating")]),
+                    (0, vec![Content::Text("cycling")]),
+                    (1, vec![Content::Text("repeating")]),
+                    (2, vec![Content::Text("alternating")]),
                 ])
             }),
-            ast::Content::Text(" content"), ast::Content::Newline,
+            Content::Text(" content"), Content::Newline,
 
-            ast::Content::Text("Text with "), 
-            ast::Content::Alternative(ast::Alternative{
-                method: ast::AlternateType::Cycle, shuffle: false,
+            Content::Text("Text with "), 
+            Content::Alternative(Alternative{
+                method: AlternateType::Cycle, shuffle: false,
                 cases: HashMap::from([
-                    (0, vec![ast::Content::Text("cycling")]),
+                    (0, vec![Content::Text("cycling")]),
                     (1, vec![
-                        ast::Content::Text("nested "),
-                        ast::Content::Alternative(ast::Alternative{
-                            method: ast::AlternateType::Cycle, shuffle: true,
+                        Content::Text("nested "),
+                        Content::Alternative(Alternative{
+                            method: AlternateType::Cycle, shuffle: true,
                             cases: HashMap::from([
-                                (0, vec![ast::Content::Text("random!")]),
+                                (0, vec![Content::Text("random!")]),
                                 (1, vec![]),
                             ])
                         }),
-                        ast::Content::Text(" content"),
+                        Content::Text(" content"),
                     ]),
-                    (2, vec![ast::Content::Text("alternating")]),
+                    (2, vec![Content::Text("alternating")]),
                 ])
             }),
-            ast::Content::Text(" content"), ast::Content::Newline,
+            Content::Text(" content"), Content::Newline,
 
-            ast::Content::Text("Text with switch "), 
-            ast::Content::Switch(ast::Switch{
-                compairison: ast::Expression::Variable("cond".to_string()),
+            Content::Text("Text with switch "), 
+            Content::Switch(Switch{
+                compairison: Expression::Variable("cond".to_string()),
                 cases: vec![
-                    (ast::Expression::Literal(crate::types::Value::Bool(true)), vec![ast::Content::Text("True!")]),
+                    (Expression::Literal(crate::types::Value::Bool(true)), vec![Content::Text("True!")]),
                 ],
-                default: Some(vec![ast::Content::Text("False")]),
+                default: Some(vec![Content::Text("False")]),
             }),
-            ast::Content::Text("."), ast::Content::Newline,
+            Content::Text("."), Content::Newline,
             
-            ast::Content::Text("Text with conditional block "),
-            ast::Content::Conditional(ast::Conditional{
+            Content::Text("Text with conditional block "),
+            Content::Conditional(Conditional{
                 cases: vec![
-                    (ast::Expression::Variable("cond".to_string()), vec![ast::Content::Text("True!")]),
+                    (Expression::Variable("cond".to_string()), vec![Content::Text("True!")]),
                 ],
-                default: Some(vec![ast::Content::Text("False")]),
+                default: Some(vec![Content::Text("False")]),
             }),
-            ast::Content::Text("."), ast::Content::Newline,
+            Content::Text("."), Content::Newline,
 
-            ast::Content::Text("Text with conditional "),
-            ast::Content::Conditional(ast::Conditional{
+            Content::Text("Text with conditional "),
+            Content::Conditional(Conditional{
                 cases: vec![
-                    (ast::Expression::Variable("cond".to_string()), vec![ast::Content::Text("  True!")]),
+                    (Expression::Variable("cond".to_string()), vec![Content::Text("  True!")]),
                 ],
                 default: None,
-            }), ast::Content::Text("."),
-            ast::Content::Newline, //TODO: End of input should not be newline
+            }), Content::Text("."),
+            Content::Newline,
+
+            Content::Text("Text with eval: a + 2 * b = "), 
+            Content::Evaluation(
+                Expression::BinOp(
+                    Operation::Add,
+                    Box::new(Expression::Variable("a".to_string())),
+                    Box::new(Expression::BinOp(
+                            Operation::Multiply,
+                            Box::new(Expression::Literal(Value::Integer(2))),
+                            Box::new(Expression::Variable("b".to_string())),
+                    )),
+                )
+            ),
+            Content::Newline, //TODO: End of input should not be newline
         ].into_iter();
 
 

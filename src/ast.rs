@@ -26,7 +26,6 @@ where
     fn parse_body(input: I) -> nom::IResult<I, Self::Body>;
 }
 
-#[allow(dead_code)]
 #[derive(Debug,)]
 pub struct Story<I>(pub Knot<I>, pub Vec<Knot<I>>, pub Vec<Function<I>>);
 
@@ -102,7 +101,6 @@ pub enum Branch {
     End, // -> END
 }
 
-#[allow(dead_code)]
 pub trait ConditionList: {
     type Item;
 
@@ -128,7 +126,6 @@ pub struct Alternative<I> {
     pub(crate) shuffle: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug,)]
 pub enum AlternateType { Once, Cycle, Stopping, }
 
@@ -147,7 +144,6 @@ pub struct Switch<I> {
     pub(crate) default: Option<Vec<Content<I>>>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug,)]
 pub enum Content<I> {
     Logic(Expression),
@@ -160,7 +156,6 @@ pub enum Content<I> {
     Newline,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, PartialEq, Debug,)]
 pub enum Expression  {
     Literal(Value),
@@ -170,7 +165,6 @@ pub enum Expression  {
     BinOp(Operation, Box<Expression>, Box<Expression>),
 }
 
-#[allow(dead_code)]
 #[derive(Copy, Clone, PartialEq, Debug,)]
 pub enum Operation {
     ///Logical:

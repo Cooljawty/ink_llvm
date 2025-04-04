@@ -23,3 +23,5 @@ Text with conditional block {
 - else: False
 }.
 Text with conditional {cond:  True!}.
+
+Text with eval: a + 2 * b = {a + 2 * b}

@@ -33,15 +33,12 @@ CONST integer = 401
 CONST decimal = 4.1
 CONST string = "string"
 CONST bool = true false
-
 CONST divert = -> knot
 CONST tunnel = -> tunnel -> to -> knot
-
-CONST = list.value
+CONST list_value = list.value
 
 -> knot
 -> tunnel -> to -> knot
 <- thread
 
 list.value
-
