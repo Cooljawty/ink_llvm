@@ -23,6 +23,15 @@ declare external void @free(ptr)
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
 
+; Message strings
+@newline_str =					constant [2 x i8] c"\0A\00"
+@error_message =				constant [7 x i8] c"Error!\00"
+@debug_message =				constant [7 x i8] c"Debug!\00"
+@debug_up_message =				constant [11 x i8] c"calling up\00"
+@debug_ret_message =			constant [12 x i8] c"calling ret\00"
+@init_message =					constant [6 x i8] c"init!\00"
+@resume_message =				constant [8 x i8] c"resume!\00"
+
 ; Strings
 %string_type = type {ptr, i32}
 declare extern_weak ptr @new_string()
@@ -244,6 +253,13 @@ success:
 ; Story
 
 ;Content Strings
+;Story.<knot>.<stitch>.<label>.body
+@story.root.root.body =			constant [3 x ptr] [
+									ptr @story.str_0, 
+									ptr @story.str_1, 
+									ptr @story.gather_0.str_0
+								]
+
 @story.str_0 =					constant [7 x i8] c"Hello!\00"
 @story.str_1 =					constant [1 x i8] c"\00"
 
@@ -256,14 +272,6 @@ success:
 @story.choice_1.str_1 =			constant [12 x i8] c" the second\00"
 
 @story.gather_0.str_0 =			constant [8 x i8] c"The end\00"
-
-@newline_str =					constant [2 x i8] c"\0A\00"
-@error_message =				constant [7 x i8] c"Error!\00"
-@debug_message =				constant [7 x i8] c"Debug!\00"
-@debug_up_message =				constant [11 x i8] c"calling up\00"
-@debug_ret_message =			constant [12 x i8] c"calling ret\00"
-@init_message =					constant [6 x i8] c"init!\00"
-@resume_message =				constant [8 x i8] c"resume!\00"
 
 define ptr @__root() presplitcoroutine 
 {
@@ -318,12 +326,21 @@ end:
 
 story:
 							store i1 true, ptr %continue_flag.addr
-							;"Hello!"
-							call i32 @write_string(ptr @out_stream, ptr @story.str_0)
 
-							;""
-							call i32 @write_string(ptr @out_stream, ptr @story.str_1)
+%index_0 =					alloca i32
+							store i32 0, ptr %index_0
+							br label %loop_0
+loop_0:
+%index_value =				load i32, ptr %index_0
+%string_addr =					getelementptr ptr, ptr @story.root.root.body, i32 %index_value
+%string =					load ptr, ptr %string_addr
+							call i32 @write_string(ptr @out_stream, ptr %string)
+%cond =						icmp ult i32 %index_value, 1
 
+%inc_0 =					add i32 %index_value, 1
+							store i32 %inc_0, ptr %index_0
+							br i1 %cond, label %loop_0, label %cont_0
+cont_0:
 							br label %story.choice_point_0
 
 story.choice_point_0:
@@ -365,9 +382,18 @@ story.choice_1:					;"* Or [B] the second"
 							br label %story.gather_0
 
 story.gather_0:					;"-"
+							br label %loop_1
+loop_1:
+%index_value_1 =			load i32, ptr %index_0
+%string_addr_1 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_value_1
+%string_1 =					load ptr, ptr %string_addr_1
+							call i32 @write_string(ptr @out_stream, ptr %string_1)
+%cond_1 =					icmp ult i32 %index_value_1, 1
 
-							;"The end"
-							call i32 @write_string(ptr @out_stream, ptr @story.gather_0.str_0)
+%inc_1 =					add i32 %index_value_1, 1
+							store i32 %inc_1, ptr %index_0
+							br i1 %cond_1, label %loop_1, label %cont_1
+cont_1:
 							store i1 false, ptr %continue_flag.addr
 
 %save_story.gather_0 =		call token @llvm.coro.save(ptr %handel)
