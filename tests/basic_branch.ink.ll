@@ -326,19 +326,16 @@ end:
 
 story:
 							store i1 true, ptr %continue_flag.addr
-
-%index_0 =					alloca i32
-							store i32 0, ptr %index_0
 							br label %loop_0
+
 loop_0:
-%index_value =				load i32, ptr %index_0
-%string_addr =					getelementptr ptr, ptr @story.root.root.body, i32 %index_value
+%index_0 =					phi i32 [0, %story], [%inc_0, %loop_0]
+%string_addr =				getelementptr ptr, ptr @story.root.root.body, i32 %index_0
 %string =					load ptr, ptr %string_addr
 							call i32 @write_string(ptr @out_stream, ptr %string)
-%cond =						icmp ult i32 %index_value, 1
+%cond =						icmp ult i32 %index_0, 1
 
-%inc_0 =					add i32 %index_value, 1
-							store i32 %inc_0, ptr %index_0
+%inc_0 =					add i32 %index_0, 1
 							br i1 %cond, label %loop_0, label %cont_0
 cont_0:
 							br label %story.choice_point_0
@@ -384,14 +381,13 @@ story.choice_1:					;"* Or [B] the second"
 story.gather_0:					;"-"
 							br label %loop_1
 loop_1:
-%index_value_1 =			load i32, ptr %index_0
-%string_addr_1 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_value_1
+%index_1 =					phi i32 [2, %story.gather_0], [%inc_1, %loop_1]
+%string_addr_1 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_1
 %string_1 =					load ptr, ptr %string_addr_1
 							call i32 @write_string(ptr @out_stream, ptr %string_1)
-%cond_1 =					icmp ult i32 %index_value_1, 1
+%cond_1 =					icmp ult i32 %index_1, 2
 
-%inc_1 =					add i32 %index_value_1, 1
-							store i32 %inc_1, ptr %index_0
+%inc_1 =					add i32 %index_1, 1
 							br i1 %cond_1, label %loop_1, label %cont_1
 cont_1:
 							store i1 false, ptr %continue_flag.addr
