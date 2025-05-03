@@ -42,6 +42,9 @@ declare extern_weak void @flush_string(ptr nocapture)
 
 @out_stream = private global %string_type {ptr null, i32 0}
 
+;Runtime Variables
+@continue_maximally =		global i1 false
+
 ;Runtime Functions, takes handel or null
 define ptr @Step(ptr %story_handel) 
 {
@@ -253,25 +256,25 @@ success:
 ; Story
 
 ;Content Strings
+@story.str_0 =					constant [ 7 x i8] c"Hello!\00"
+@story.str_1 =					constant [ 2 x i8] c"a\00"
+
+@story.choice_0.str_0 =			constant [ 7 x i8] c"Chose \00"
+@story.choice_0.str_choice =	constant [ 2 x i8] c"A\00"
+@story.choice_0.str_1 =			constant [11 x i8] c" the first\00"
+
+@story.choice_1.str_0 =			constant [ 4 x i8] c"Or \00"
+@story.choice_1.str_choice =	constant [ 2 x i8] c"B\00"
+@story.choice_1.str_1 =			constant [12 x i8] c" the second\00"
+
+@story.gather_0.str_0 =			constant [ 8 x i8] c"The end\00"
+
 ;Story.<knot>.<stitch>.<label>.body
 @story.root.root.body =			constant [3 x ptr] [
 									ptr @story.str_0, 
 									ptr @story.str_1, 
 									ptr @story.gather_0.str_0
 								]
-
-@story.str_0 =					constant [7 x i8] c"Hello!\00"
-@story.str_1 =					constant [1 x i8] c"\00"
-
-@story.choice_0.str_0 =			constant [7 x i8] c"Chose \00"
-@story.choice_0.str_choice =	constant [2 x i8] c"A\00"
-@story.choice_0.str_1 =			constant [11 x i8] c" the first\00"
-
-@story.choice_1.str_0 =			constant [4 x i8] c"Or \00"
-@story.choice_1.str_choice =	constant [2 x i8] c"B\00"
-@story.choice_1.str_1 =			constant [12 x i8] c" the second\00"
-
-@story.gather_0.str_0 =			constant [8 x i8] c"The end\00"
 
 define ptr @__root() presplitcoroutine 
 {
@@ -329,14 +332,22 @@ story:
 							br label %loop_0
 
 loop_0:
-%index_0 =					phi i32 [0, %story], [%inc_0, %loop_0]
-%string_addr =				getelementptr ptr, ptr @story.root.root.body, i32 %index_0
-%string =					load ptr, ptr %string_addr
-							call i32 @write_string(ptr @out_stream, ptr %string)
-%cond =						icmp ult i32 %index_0, 1
+%index_0 =					phi i32 [0, %story], [%inc_0, %resume.loop_0], [%inc_0, %suspend_point.loop_0]
+%string_addr_0 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_0
+%string_0 =					load ptr, ptr %string_addr_0
+							call i32 @write_string(ptr @out_stream, ptr %string_0)
 
 %inc_0 =					add i32 %index_0, 1
-							br i1 %cond, label %loop_0, label %cont_0
+%cond_0 =					icmp ule i32 %inc_0, 1
+							br i1 %cond_0, label %resume.loop_0, label %cont_0
+resume.loop_0:
+%continue_value_0 =			load i1, ptr @continue_maximally
+							br i1 %continue_value_0, label %loop_0, label %suspend_point.loop_0
+suspend_point.loop_0:
+%suspend_story.loop_0 =		call i8 @llvm.coro.suspend(token none, i1 false)
+							switch i8 %suspend_story.loop_0, label %suspend 
+													  [i8 0, label %loop_0
+													   i8 1, label %destroy]
 cont_0:
 							br label %story.choice_point_0
 
@@ -381,14 +392,22 @@ story.choice_1:					;"* Or [B] the second"
 story.gather_0:					;"-"
 							br label %loop_1
 loop_1:
-%index_1 =					phi i32 [2, %story.gather_0], [%inc_1, %loop_1]
+%index_1 =					phi i32 [2, %story.gather_0], [%inc_1, %resume.loop_1], [%inc_1, %suspend_point.loop_1]
 %string_addr_1 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_1
 %string_1 =					load ptr, ptr %string_addr_1
 							call i32 @write_string(ptr @out_stream, ptr %string_1)
-%cond_1 =					icmp ult i32 %index_1, 2
 
 %inc_1 =					add i32 %index_1, 1
-							br i1 %cond_1, label %loop_1, label %cont_1
+%cond_1 =					icmp ule i32 %inc_1, 2
+							br i1 %cond_1, label %resume.loop_1, label %cont_1
+resume.loop_1:
+%continue_value_1 =			load i1, ptr @continue_maximally
+							br i1 %continue_value_1, label %loop_1, label %suspend_point.loop_1
+suspend_point.loop_1:
+%suspend_story.loop_1 =		call i8 @llvm.coro.suspend(token none, i1 false)
+							switch i8 %suspend_story.loop_1, label %suspend 
+													  [i8 0, label %loop_1
+													   i8 1, label %destroy]
 cont_1:
 							store i1 false, ptr %continue_flag.addr
 
