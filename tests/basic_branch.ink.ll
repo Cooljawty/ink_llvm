@@ -128,7 +128,7 @@ define ptr @NewStory()
 entry:
 							call i32 @puts(ptr @init_message)
 
-%new_instance_handel =		call ptr @__root()
+%new_instance_handel =		call ptr @B()
 							ret ptr %new_instance_handel
 }
 
@@ -276,6 +276,14 @@ success:
 									ptr @story.gather_0.str_0
 								]
 
+@story.B.str_0 =				constant [13 x i8] c"Start tunnel\00"
+@story.B.str_2 =				constant [11 x i8] c"End tunnel\00"
+
+@story.B.root.body =			constant [2 x ptr] [
+									ptr @story.B.str_0,
+									ptr @story.B.str_2
+								]
+
 define ptr @__root() presplitcoroutine 
 {
 entry:
@@ -409,6 +417,91 @@ suspend_point.loop_1:
 													  [i8 0, label %loop_1
 													   i8 1, label %destroy]
 cont_1:
+							store i1 false, ptr %continue_flag.addr
+
+%save_story.gather_0 =		call token @llvm.coro.save(ptr %handel)
+%suspend_story.gather_0 =	call i8 @llvm.coro.suspend(token %save_story.gather_0, i1 true)
+							switch i8 %suspend_story.gather_0, label %suspend [i8 0, label %error i8 1, label %destroy]
+}
+
+define ptr @B() presplitcoroutine 
+{
+entry:
+%promise =					alloca %promise_type
+%id =						call token @llvm.coro.id(i32 4, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
+%alloc_flag =				call i1 @llvm.coro.alloc(token %id)
+							br i1 %alloc_flag, label %frame_alloc, label %begin
+frame_alloc:
+%size =						call i32 @llvm.coro.size.i32()
+%alloc =					call ptr @malloc(i32 %size)
+							br label %begin
+begin:
+%phi_alloc =				phi ptr [null, %entry], [%alloc, %frame_alloc]
+%handel =					call noalias ptr @llvm.coro.begin(token %id, ptr %phi_alloc)
+
+%choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
+
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
+							store i1 true, ptr %continue_flag.addr
+
+%save_begin =				call token @llvm.coro.save(ptr %handel)
+%suspend_begin =			call i8 @llvm.coro.suspend(token %save_begin, i1 false)
+							switch i8 %suspend_begin,  label %suspend 
+												[i8 0, label %story
+												 i8 1, label %destroy]
+
+suspend:
+%unused =					call i1 @llvm.coro.end(ptr null, i1 false, token none)
+							ret ptr %handel
+error:
+							;TODO: Error handeling
+							call i32 @puts(ptr @error_message)
+							br label %suspend
+
+destroy:
+%frame_mem =				call ptr @llvm.coro.free(token %id, ptr %handel)
+%free_frame =				icmp ne ptr %frame_mem, null
+							br i1 %free_frame, label %frame_free, label %end
+frame_free:
+							call void @free(ptr %frame_mem)
+							br label %end
+end:
+							ret ptr null
+
+story:
+							store i1 true, ptr %continue_flag.addr
+							br label %loop_0
+
+loop_0:
+%index_0 =					phi i32 [0, %story], [%inc_0, %resume.loop_0], [%inc_0, %suspend_point.loop_0]
+%string_addr_0 =			getelementptr ptr, ptr @story.B.root.body, i32 %index_0
+%string_0 =					load ptr, ptr %string_addr_0
+							call i32 @write_string(ptr @out_stream, ptr %string_0)
+
+%inc_0 =					add i32 %index_0, 1
+%cond_0 =					icmp ule i32 %inc_0, 1
+							br i1 %cond_0, label %resume.loop_0, label %B.cont_0
+resume.loop_0:
+%continue_value_0 =			load i1, ptr @continue_maximally
+							br i1 %continue_value_0, label %loop_0, label %suspend_point.loop_0
+suspend_point.loop_0:
+%suspend_story.loop_0 =		call i8 @llvm.coro.suspend(token none, i1 false)
+							switch i8 %suspend_story.loop_0, label %suspend 
+													  [i8 0, label %loop_0
+													   i8 1, label %destroy]
+B.cont_0:
+							br label %story.choice_point_0
+
+story.choice_point_0:
+							store i1 false, ptr %continue_flag.addr
+							store i32 0, ptr %choice_count.addr
+
+							%save_story.choice_point_0 = call token @llvm.coro.save(ptr %handel)
+							%suspend_story.choice_point_0 = call i8 @llvm.coro.suspend(token %save_story.choice_point_0, i1 false)
+							switch i8 %suspend_story.choice_point_0, label %suspend 
+																	[i8 0, label %B.cont_0
+																	 i8 1, label %destroy]
+cont_0:
 							store i1 false, ptr %continue_flag.addr
 
 %save_story.gather_0 =		call token @llvm.coro.save(ptr %handel)

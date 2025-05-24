@@ -1,5 +1,7 @@
 Hello!
 
+-> B ->
+
 * Chose [A] the first
 	A new path!
 	** (left) Left path [or <>]
@@ -10,3 +12,10 @@ Hello!
 -
 
 The end
+
+= B
+Start tunnel
+
+End tunnel
+
+->->
