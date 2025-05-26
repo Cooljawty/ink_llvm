@@ -11,14 +11,9 @@ declare external void @free(ptr)
 							; 0 text: ptr
 							; 1 tags: ptr
 
-%promise_type =				type { i32, %call_chain_type, i1} 
+%promise_type =				type { i32, i1} 
 							; 0 choice_index: i32 
-							; 1 call_chain: {ptr, ptr}
-							; 2 continue_flag: i1
-
-%call_chain_type =			type { ptr, ptr }
-							; 0 up: ptr
-							; 1 ret: ptr
+							; 1 continue_flag: i1
 
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
@@ -107,7 +102,7 @@ resume:
 %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
 
 %resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
-%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
+%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
@@ -142,53 +137,14 @@ entry:
 load_promise:
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
-;%up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
-;%up_handel =				load ptr, ptr %up_handel.addr
-;
-;%ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
-;%ret_handel =				load ptr, ptr %ret_handel.addr
-
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
 							br i1 %end_of_knot, label %done, label %resume
 done:
 							call void @llvm.coro.destroy(ptr %handel)
-;%diverting =				icmp ne ptr %up_handel, null
-;							br i1 %diverting, label %divert, label %done2
 							br label %end
-;done2:
-;%return_from_tunnel =		icmp ne ptr %ret_handel, null
-;							br i1 %return_from_tunnel, label %call_ret, label %end
-;divert:
-;%has_return_handel =		icmp ne ptr %ret_handel, null
-;							br i1 %has_return_handel, label %delete_chain, label %call_up
-;delete_chain:
-;%parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
-
-;Getting ret handel
-;%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 0, i1 false) ; TODO: Get target platform alignment
-;%ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
-;%ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
-;
-;							call void @llvm.coro.destroy(ptr %parent_handel)
-;Looping
-;%end_of_chain =				icmp eq ptr %ret_chain_handel, null
-;							br i1 %end_of_chain, label %call_up, label %delete_chain
-
-;continuing:
-;%tunneling =				icmp ne ptr %up_handel, null
-;							br i1 %tunneling, label %call_up, label %resume
-;call_ret:
-;							call i32 @puts(ptr @debug_ret_message)
-;							br label %resume
-;call_up:
-;							call i32 @puts(ptr @debug_up_message)
-;							br label %resume
 resume:
-; %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
-%resume_handel =			phi ptr [%handel, %load_promise]
-
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %resume_handel, i32 0, i1 false) ; TODO: Get target platform alignment
-%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
+%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
@@ -197,7 +153,7 @@ resume_call:
 %output_string =			load %string_type, ptr %output_string.addr
 							store %string_type %output_string, ptr @out_stream
 
-							call void @llvm.coro.resume(ptr %resume_handel)
+							call void @llvm.coro.resume(ptr %handel)
 							ret ptr %output_string.addr
 resume_wait:
 							ret ptr null
@@ -214,7 +170,7 @@ define i1 @CanContinue(ptr %handel)
 {
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
-%continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 2
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
 							ret i1 %continue_flag
 }
@@ -249,7 +205,7 @@ success:
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 %promise.choice_index.addr =getelementptr %promise_type, ptr %promise.addr, i32 0
 							store i32 %choice_index, ptr %promise.choice_index.addr
-%promise.continue_flag.addr=getelementptr %promise_type, ptr %promise.addr, i32 2
+%promise.continue_flag.addr=getelementptr %promise_type, ptr %promise.addr, i32 1
 							store i1 true, ptr %promise.continue_flag.addr
 							ret void
 }
@@ -302,7 +258,7 @@ begin:
 
 %choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
 
-%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 1
 							store i1 true, ptr %continue_flag.addr
 
 ; TODO: Fix up_handel non-null issue						
@@ -365,7 +321,7 @@ cont_0:
 
 thread_0:
 							call void @llvm.coro.resume(ptr %thread_hdl_0)
-%thread_continue_flag.addr =getelementptr %promise_type, ptr %thread_promise.addr, i32 2
+%thread_continue_flag.addr =getelementptr %promise_type, ptr %thread_promise.addr, i32 1
 %thread_continue_flag =		load i1, ptr %thread_continue_flag.addr
 
 							br i1 %thread_continue_flag, label %resume.thread_0, label %story.choice_point_0
@@ -463,7 +419,7 @@ begin:
 
 %choice_count.addr =		getelementptr %choice_list_type, ptr @choice_list, i32 0
 
-%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 2
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 1
 							store i1 true, ptr %continue_flag.addr
 
 %save_begin =				call token @llvm.coro.save(ptr %handel)
