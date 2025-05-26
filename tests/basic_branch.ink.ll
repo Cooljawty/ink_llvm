@@ -261,13 +261,6 @@ begin:
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise, i32 1
 							store i1 true, ptr %continue_flag.addr
 
-; TODO: Fix up_handel non-null issue						
-; %up_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 0
-; 							store ptr null, ptr %up_handel.addr
-; 
-; %ret_handel.addr =			getelementptr %promise_type, ptr %promise, i32 1, i32 1
-; 							store ptr null, ptr %ret_handel.addr
-
 %save_begin =				call token @llvm.coro.save(ptr %handel)
 %suspend_begin =			call i8 @llvm.coro.suspend(token %save_begin, i1 false)
 							switch i8 %suspend_begin,  label %suspend 
@@ -335,6 +328,7 @@ suspend_point.thread_0:
 													   i8 1, label %destroy]
 
 story.choice_point_0:
+							;call void @llvm.coro.destroy(ptr %thread_hdl_0)
 
 							store i1 false, ptr %continue_flag.addr
 							%choice_count = load i32, ptr %choice_count.addr
