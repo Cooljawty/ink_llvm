@@ -46,8 +46,11 @@ int main()
 			string* str = ContinueMaximally(story);
 			printf("\'%s\'\n", str->buffer);
 
-			if(prev_string != NULL) free_string(prev_string);
-			prev_string = str;
+			//if(prev_string != NULL) free_string(prev_string);
+			//prev_string = str;
+			
+			printf("paused..");
+			getchar();
 		}
 
 		if(ChoiceCount(story) > 0)

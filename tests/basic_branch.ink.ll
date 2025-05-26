@@ -61,7 +61,7 @@ load_promise:
 ; %handel =					phi ptr [%new_instance_handel, %initilize], [%story_handel, %entry]
 %handel =					phi ptr [%story_handel, %entry]
 
-%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
 %up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
 %up_handel =				load ptr, ptr %up_handel.addr
@@ -86,7 +86,7 @@ divert:
 delete_chain:
 %parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
 ;Getting ret handel
-%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 0, i1 false) ; TODO: Get target platform alignment
 %ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
 %ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
 
@@ -106,7 +106,7 @@ call_up:
 resume:
 %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
 
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 %continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
@@ -128,7 +128,7 @@ define ptr @NewStory()
 entry:
 							call i32 @puts(ptr @init_message)
 
-%new_instance_handel =		call ptr @B()
+%new_instance_handel =		call ptr @__root()
 							ret ptr %new_instance_handel
 }
 
@@ -140,53 +140,54 @@ entry:
 %new_instance =				icmp eq ptr %handel, null
 							br i1 %new_instance, label %error, label %load_promise
 load_promise:
-%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
-%up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
-%up_handel =				load ptr, ptr %up_handel.addr
-
-%ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
-%ret_handel =				load ptr, ptr %ret_handel.addr
+;%up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
+;%up_handel =				load ptr, ptr %up_handel.addr
+;
+;%ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
+;%ret_handel =				load ptr, ptr %ret_handel.addr
 
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
-							br i1 %end_of_knot, label %done, label %continuing
+							br i1 %end_of_knot, label %done, label %resume
 done:
 							call void @llvm.coro.destroy(ptr %handel)
-%diverting =				icmp ne ptr %up_handel, null
-							br i1 %diverting, label %divert, label %done2
-done2:
-%return_from_tunnel =		icmp ne ptr %ret_handel, null
-							br i1 %return_from_tunnel, label %call_ret, label %end
-divert:
-%has_return_handel =		icmp ne ptr %ret_handel, null
-							br i1 %has_return_handel, label %delete_chain, label %call_up
-delete_chain:
-%parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
+;%diverting =				icmp ne ptr %up_handel, null
+;							br i1 %diverting, label %divert, label %done2
+							br label %end
+;done2:
+;%return_from_tunnel =		icmp ne ptr %ret_handel, null
+;							br i1 %return_from_tunnel, label %call_ret, label %end
+;divert:
+;%has_return_handel =		icmp ne ptr %ret_handel, null
+;							br i1 %has_return_handel, label %delete_chain, label %call_up
+;delete_chain:
+;%parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
 
 ;Getting ret handel
-%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 4, i1 false) ; TODO: Get target platform alignment
-%ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
-%ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
-
-							call void @llvm.coro.destroy(ptr %parent_handel)
+;%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 0, i1 false) ; TODO: Get target platform alignment
+;%ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
+;%ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
+;
+;							call void @llvm.coro.destroy(ptr %parent_handel)
 ;Looping
-%end_of_chain =				icmp eq ptr %ret_chain_handel, null
-							br i1 %end_of_chain, label %call_up, label %delete_chain
+;%end_of_chain =				icmp eq ptr %ret_chain_handel, null
+;							br i1 %end_of_chain, label %call_up, label %delete_chain
 
-continuing:
-%tunneling =				icmp ne ptr %up_handel, null
-							br i1 %tunneling, label %call_up, label %resume
-call_ret:
-							call i32 @puts(ptr @debug_ret_message)
-							br label %resume
-call_up:
-							call i32 @puts(ptr @debug_up_message)
-							br label %resume
+;continuing:
+;%tunneling =				icmp ne ptr %up_handel, null
+;							br i1 %tunneling, label %call_up, label %resume
+;call_ret:
+;							call i32 @puts(ptr @debug_ret_message)
+;							br label %resume
+;call_up:
+;							call i32 @puts(ptr @debug_up_message)
+;							br label %resume
 resume:
 ; %resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
-%resume_handel =			phi ptr [%handel, %continuing], [%handel, %call_up], [%handel, %call_ret]
+%resume_handel =			phi ptr [%handel, %load_promise]
 
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %resume_handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %resume_handel, i32 0, i1 false) ; TODO: Get target platform alignment
 %continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 2
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
@@ -211,7 +212,7 @@ error:
 ; it's control flow
 define i1 @CanContinue(ptr %handel)
 {
-%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
 %continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 2
 %continue_flag =			load i1, ptr %continue_flag.addr
@@ -245,7 +246,7 @@ error:
 							call i32 @puts(ptr @error_message)
 							ret void
 success:
-%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 4, i1 false) ; TODO: Get target platform alignment
+%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 %promise.choice_index.addr =getelementptr %promise_type, ptr %promise.addr, i32 0
 							store i32 %choice_index, ptr %promise.choice_index.addr
 %promise.continue_flag.addr=getelementptr %promise_type, ptr %promise.addr, i32 2
@@ -288,7 +289,7 @@ define ptr @__root() presplitcoroutine
 {
 entry:
 %promise =					alloca %promise_type
-%id =						call token @llvm.coro.id(i32 4, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
+%id =						call token @llvm.coro.id(i32 0, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
 %alloc_flag =				call i1 @llvm.coro.alloc(token %id)
 							br i1 %alloc_flag, label %frame_alloc, label %begin
 frame_alloc:
@@ -357,11 +358,32 @@ suspend_point.loop_0:
 													  [i8 0, label %loop_0
 													   i8 1, label %destroy]
 cont_0:
-							br label %story.choice_point_0
+							;"-> B ->"
+%thread_hdl_0 =				call ptr @B()
+%thread_promise.addr =		call ptr @llvm.coro.promise(ptr %thread_hdl_0, i32 0, i1 false) ; TODO: Get target platform alignment
+							br label %thread_0
+
+thread_0:
+							call void @llvm.coro.resume(ptr %thread_hdl_0)
+%thread_continue_flag.addr =getelementptr %promise_type, ptr %thread_promise.addr, i32 2
+%thread_continue_flag =		load i1, ptr %thread_continue_flag.addr
+
+							br i1 %thread_continue_flag, label %resume.thread_0, label %story.choice_point_0
+resume.thread_0:
+%continue_value_1 =			load i1, ptr @continue_maximally
+							br i1 %continue_value_1, label %thread_0, label %suspend_point.thread_0
+suspend_point.thread_0:
+%suspend_story.thread_0 =	call i8 @llvm.coro.suspend(token none, i1 false)
+							switch i8 %suspend_story.thread_0, label %suspend 
+													  [i8 0, label %thread_0
+													   i8 1, label %destroy]
 
 story.choice_point_0:
+
 							store i1 false, ptr %continue_flag.addr
-							store i32 2, ptr %choice_count.addr
+							%choice_count = load i32, ptr %choice_count.addr
+							%choice_count_sum = add i32 %choice_count, 2
+							store i32 %choice_count_sum, ptr %choice_count.addr
 
 							%save_story.choice_point_0 = call token @llvm.coro.save(ptr %handel)
 							%suspend_story.choice_point_0 = call i8 @llvm.coro.suspend(token %save_story.choice_point_0, i1 false)
@@ -409,8 +431,8 @@ loop_1:
 %cond_1 =					icmp ule i32 %inc_1, 2
 							br i1 %cond_1, label %resume.loop_1, label %cont_1
 resume.loop_1:
-%continue_value_1 =			load i1, ptr @continue_maximally
-							br i1 %continue_value_1, label %loop_1, label %suspend_point.loop_1
+%continue_value_2 =			load i1, ptr @continue_maximally
+							br i1 %continue_value_2, label %loop_1, label %suspend_point.loop_1
 suspend_point.loop_1:
 %suspend_story.loop_1 =		call i8 @llvm.coro.suspend(token none, i1 false)
 							switch i8 %suspend_story.loop_1, label %suspend 
@@ -428,7 +450,7 @@ define ptr @B() presplitcoroutine
 {
 entry:
 %promise =					alloca %promise_type
-%id =						call token @llvm.coro.id(i32 4, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
+%id =						call token @llvm.coro.id(i32 0, ptr %promise, ptr null, ptr null) ;TODO: Determine native target alignment
 %alloc_flag =				call i1 @llvm.coro.alloc(token %id)
 							br i1 %alloc_flag, label %frame_alloc, label %begin
 frame_alloc:
