@@ -43,14 +43,17 @@ int main()
 		while(CanContinue(story))
 		{
 			printf("Stepping..\n");
-			string* str = ContinueMaximally(story);
-			printf("\'%s\'\n", str->buffer);
-
-			//if(prev_string != NULL) free_string(prev_string);
-			//prev_string = str;
 			
-			printf("paused..");
-			getchar();
+			//string* str = Step(story);
+			//printf("paused..");
+			//getchar();
+			
+			string* str = ContinueMaximally(story);
+
+			printf("\'%s\'\n", str->buffer);
+			if(prev_string != NULL) free_string(prev_string);
+			prev_string = str;
+			
 		}
 
 		if(ChoiceCount(story) > 0)

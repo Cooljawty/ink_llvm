@@ -38,82 +38,41 @@ declare extern_weak void @flush_string(ptr nocapture)
 @out_stream = private global %string_type {ptr null, i32 0}
 
 ;Runtime Variables
-@continue_maximally =		global i1 false
+@continue_maximally =		internal global i1 false
 
 ;Runtime Functions, takes handel or null
-define ptr @Step(ptr %story_handel) 
+define ptr @Step(ptr %handel)
 {
 entry:
-%new_instance =				icmp eq ptr %story_handel, null
-							br i1 %new_instance, label %initilize, label %load_promise
-initilize:
-%init_message.addr =		getelementptr [7 x i8], ptr @init_message, i32 0, i32 0
-							call i32 @puts(ptr %init_message.addr)
-%new_instance_handel =		call ptr @__root()
-							ret ptr %new_instance_handel
-
+%new_instance =				icmp eq ptr %handel, null
+							br i1 %new_instance, label %error, label %load_promise
 load_promise:
-; %handel =					phi ptr [%new_instance_handel, %initilize], [%story_handel, %entry]
-%handel =					phi ptr [%story_handel, %entry]
-
 %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
 
-%up_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 0
-%up_handel =				load ptr, ptr %up_handel.addr
-
-%ret_handel.addr =			getelementptr %promise_type, ptr %promise.addr, i32 1, i32 1
-%ret_handel =				load ptr, ptr %ret_handel.addr
-
-%outstream.addr =			getelementptr %promise_type, ptr %promise.addr, i32 3
-
 %end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
-							br i1 %end_of_knot, label %done, label %continuing
+							br i1 %end_of_knot, label %done, label %resume
 done:
 							call void @llvm.coro.destroy(ptr %handel)
-%diverting =				icmp ne ptr %up_handel, null
-							br i1 %diverting, label %divert, label %done2
-done2:
-%return_from_tunnel =		icmp ne ptr %ret_handel, null
-							br i1 %return_from_tunnel, label %call_ret, label %end
-divert:
-%has_return_handel =		icmp ne ptr %ret_handel, null
-							br i1 %has_return_handel, label %delete_chain, label %call_up
-delete_chain:
-%parent_handel =			phi ptr [%ret_handel, %divert], [%ret_chain_handel, %delete_chain]
-;Getting ret handel
-%ret_promise.addr =			call ptr @llvm.coro.promise(ptr %parent_handel, i32 0, i1 false) ; TODO: Get target platform alignment
-%ret_chain_handel.addr =	getelementptr %promise_type, ptr %ret_promise.addr, i32 1, i32 1
-%ret_chain_handel =			load ptr, ptr %ret_chain_handel.addr
-
-							call void @llvm.coro.destroy(ptr %parent_handel)
-;Looping
-%end_of_chain =				icmp eq ptr %ret_chain_handel, null
-							br i1 %end_of_chain, label %call_up, label %delete_chain
-
-continuing:
-%tunneling =				icmp ne ptr %up_handel, null
-							br i1 %tunneling, label %call_up, label %resume
-call_ret:
-							br label %resume
-call_up:
-							call i32 @puts(ptr @debug_message)
-							br label %resume
+							br label %end
 resume:
-%resume_handel =			phi ptr [%handel, %continuing], [%up_handel, %call_up], [%ret_handel, %call_ret]
-
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
-%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 1
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
 							call i32 @puts(ptr @resume_message)
+%output_string.addr =		call ptr @new_string()
+%output_string =			load %string_type, ptr %output_string.addr
+							store %string_type %output_string, ptr @out_stream
 
-							call void @llvm.coro.resume(ptr %resume_handel)
-							;TODO: call flush()
-							ret ptr %resume_handel
+							store i1 false, ptr @continue_maximally
+							call void @llvm.coro.resume(ptr %handel)
+							ret ptr %output_string.addr
 resume_wait:
-							ret ptr %resume_handel
+							ret ptr null
 end:
+							ret ptr null
+error:
+							call i32 @puts(ptr @error_message)
 							ret ptr null
 }
 
@@ -143,8 +102,7 @@ done:
 							call void @llvm.coro.destroy(ptr %handel)
 							br label %end
 resume:
-%resume_promise.addr =		call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
-%continue_flag.addr =		getelementptr %promise_type, ptr %resume_promise.addr, i32 1
+%continue_flag.addr =		getelementptr %promise_type, ptr %promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
 							br i1 %continue_flag, label %resume_call, label %resume_wait
 resume_call:
@@ -153,6 +111,7 @@ resume_call:
 %output_string =			load %string_type, ptr %output_string.addr
 							store %string_type %output_string, ptr @out_stream
 
+							store i1 true, ptr @continue_maximally
 							call void @llvm.coro.resume(ptr %handel)
 							ret ptr %output_string.addr
 resume_wait:
