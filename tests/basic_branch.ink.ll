@@ -18,6 +18,10 @@ declare external void @free(ptr)
 %choice_list_type =		type {i32, ptr}
 @choice_list = private global %choice_list_type { i32 0, ptr null }
 
+%story_handel_type =	type {ptr, ptr}
+						; 0 continuation_fn: fn*
+						; 1 frame_buffer: ptr
+
 ; Message strings
 @newline_str =					constant [2 x i8] c"\0A\00"
 @error_message =				constant [7 x i8] c"Error!\00"
@@ -82,24 +86,22 @@ define ptr @NewStory()
 entry:
 							call i32 @puts(ptr @init_message)
 
-							ret ptr @__root
+%handel =					alloca %story_handel_type
+%ptr_size =					load i32, ptr @ptr_size
+%frame_buffer =				call ptr @malloc(i32 %ptr_size)
+
+%cont_fn.address =			getelementptr %story_handel_type, ptr %handel, i32 0	
+%frame_buffer.address =		getelementptr %story_handel_type, ptr %handel, i32 1
+							store ptr @__root, ptr %cont_fn.address
+							store ptr %frame_buffer, ptr %frame_buffer.address
+
+							ret ptr %handel
 }
 
 ; Steps through the given Story handel returning all lines of content until
 ; the story reaches a choice point/end of story
-define ptr @ContinueMaximally(ptr %handel)
+define ptr @ContinueMaximally(ptr %handel.address)
 {
-entry:
-%new_instance =				icmp eq ptr %handel, null
-							br i1 %new_instance, label %error, label %load_promise
-load_promise:
-%promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
-
-%end_of_knot =				call i1 @llvm.coro.done(ptr %handel)
-							br i1 %end_of_knot, label %done, label %resume
-done:
-							call void @llvm.coro.destroy(ptr %handel)
-							br label %end
 resume:
 %continue_flag.addr =		getelementptr %yield_type, ptr %promise.addr, i32 1
 %continue_flag =			load i1, ptr %continue_flag.addr
@@ -109,9 +111,10 @@ resume_call:
 %output_string.addr =		call ptr @new_string()
 %output_string =			load %string_type, ptr %output_string.addr
 							store %string_type %output_string, ptr @out_stream
-
+%cont_fn =					extractvalue %story_handel_type, %handel, 0
+%frame_buffer =				extractvalue %story_handel_type, %handel, 1
 							store i1 true, ptr @continue_maximally
-							call void @llvm.coro.resume(ptr %handel)
+%result =					call %cont_fn(%frame_buffer, i1 0)
 							ret ptr %output_string.addr
 resume_wait:
 							ret ptr null
@@ -205,12 +208,11 @@ declare %result_type @cont_fn_proto(ptr %frame_buff, i1 %flag)
 									ptr @story.B.str_2
 								]
 
-define %result_type @__root() presplitcoroutine 
+define %result_type @__root(ptr %frame_buffer, i1 %flag) presplitcoroutine 
 {
 entry:
 %ptr_size =					load i32, ptr @ptr_size
 %allignment =				load i32, ptr @allignment
-%frame_buffer =				call ptr @malloc(i32 %ptr_size)
 %id =						call token @llvm.coro.id.retcon(
 									i32 %ptr_size, i32 %allignment, ptr %frame_buffer, 
 									ptr @cont_fn_proto,
@@ -340,7 +342,7 @@ cont_1:
 							br label %destroy
 }
 
-define %result_type @B() presplitcoroutine 
+define %result_type @B(ptr %frame_buff, i1 %flag) presplitcoroutine 
 {
 entry:
 %ptr_size =					load i32, ptr @ptr_size
