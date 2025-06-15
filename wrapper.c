@@ -44,11 +44,11 @@ int main()
 		{
 			printf("Stepping..\n");
 			
-			//string* str = Step(story);
-			//printf("paused..");
-			//getchar();
-			
-			string* str = ContinueMaximally(story);
+			string* str = Step(story);
+			//string* str = ContinueMaximally(story);
+
+			printf("paused..");
+			getchar();
 
 			printf("\'%s\'\n", str->buffer);
 			if(prev_string != NULL) free_string(prev_string);
