@@ -51,7 +51,7 @@ int main()
 			getchar();
 
 			printf("\'%s\'\n", str->buffer);
-			if(prev_string != NULL) free_string(prev_string);
+			//if(prev_string != NULL) free_string(prev_string);
 			prev_string = str;
 			
 		}

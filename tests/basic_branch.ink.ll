@@ -14,9 +14,16 @@ declare external void @free(ptr)
 %choice_list_type =				type {i32, ptr}
 @choice_list =					private global %choice_list_type { i32 0, ptr null }
 
-%story_handel_type =			type {ptr, ptr}
+%story_handel_type =			type {ptr, ptr, i1}
 								; 0 continuation_fn: fn*
 								; 1 frame_buffer: ptr
+								; 2 continue_flag: i1
+
+declare %result_type @cont_fn_proto(ptr %frame_buff, i1 %flag)
+%result_type =					type { ptr, %yield_type }
+%yield_type =					type { i32, i1} 
+								; 0 choice_index: i32 
+								; 1 continue_flag: i1
 
 ; Message strings
 @newline_str =					constant [2 x i8] c"\0A\00"
@@ -50,16 +57,20 @@ resume:
 							store %string_type %output_string, ptr @out_stream
 
 %cont_fn.addr =				getelementptr %story_handel_type, ptr %handel.address, i32 0
-%cont_fn =					load ptr, ptr %cont_fn.addr
 %frame_buffer.addr =		getelementptr %story_handel_type, ptr %handel.address, i32 1
+%continue_flag.addr =		getelementptr %story_handel_type, ptr %handel.address, i32 2
+%cont_fn =					load ptr, ptr %cont_fn.addr
 %frame_buffer =				load ptr, ptr %frame_buffer.addr
 
 							store i1 false, ptr @continue_maximally
 
-%result =					call {ptr, %yield_type} %cont_fn(ptr %frame_buffer, i1 0)
+%result =					call {ptr, {i32, i1}} %cont_fn(ptr %frame_buffer, i1 0)
 							
-%result.cont_fn =			extractvalue {ptr, %yield_type} %result, 0
+%result.cont_fn =			extractvalue {ptr, {i32, i1}} %result, 0
 							store ptr %result.cont_fn, ptr %cont_fn.addr
+
+%result.continue_flag =		extractvalue {ptr, {i32, i1}} %result, 1, 1
+							store i1 %result.continue_flag, ptr %continue_flag.addr
 
 							ret ptr %output_string.addr
 }
@@ -71,14 +82,17 @@ entry:
 							call i32 @puts(ptr @init_message)
 
 %ptr_size =					load i32, ptr @ptr_size
-%handel_size =				mul i32 %ptr_size, 2 
+%1 =						mul i32 %ptr_size, 2 
+%handel_size =				add i32 %1, 9
 %frame_buffer =				call ptr @malloc(i32 %ptr_size)
 %handel =					call ptr @malloc(i32 %handel_size)
 
 %cont_fn.address =			getelementptr %story_handel_type, ptr %handel, i32 0	
 %frame_buffer.address =		getelementptr %story_handel_type, ptr %handel, i32 1
+%continue_flag.address =	getelementptr %story_handel_type, ptr %handel, i32 2
 							store ptr @__root, ptr %cont_fn.address
 							store ptr %frame_buffer, ptr %frame_buffer.address
+							store i1 true, ptr %continue_flag.address
 
 							ret ptr %handel
 }
@@ -94,16 +108,20 @@ resume:
 							store %string_type %output_string, ptr @out_stream
 
 %cont_fn.addr =				getelementptr %story_handel_type, ptr %handel.address, i32 0
-%cont_fn =					load ptr, ptr %cont_fn.addr
 %frame_buffer.addr =		getelementptr %story_handel_type, ptr %handel.address, i32 1
+%continue_flag.addr =		getelementptr %story_handel_type, ptr %handel.address, i32 2
+%cont_fn =					load ptr, ptr %cont_fn.addr
 %frame_buffer =				load ptr, ptr %frame_buffer.addr
 
 							store i1 true, ptr @continue_maximally
 
-%result =					call {ptr, %yield_type} %cont_fn(ptr %frame_buffer, i1 0)
+%result =					call {ptr, {i32, i1}} %cont_fn(ptr %frame_buffer, i1 0)
 							
-%result.cont_fn =			extractvalue {ptr, %yield_type} %result, 0
+%result.cont_fn =			extractvalue {ptr, {i32, i1}} %result, 0
 							store ptr %result.cont_fn, ptr %cont_fn.addr
+
+%result.continue_flag =		extractvalue {ptr, {i32, i1}} %result, 1, 1
+							store i1 %result.continue_flag, ptr %continue_flag.addr
 
 							ret ptr %output_string.addr
 }
@@ -112,13 +130,10 @@ resume:
 ; it's control flow
 define i1 @CanContinue(ptr %handel)
 {
-; TODO:
-; %promise.addr =				call ptr @llvm.coro.promise(ptr %handel, i32 0, i1 false) ; TODO: Get target platform alignment
-; 
-; %continue_flag.addr =		getelementptr %yield_type, ptr %promise.addr, i32 1
-; %continue_flag =			load i1, ptr %continue_flag.addr
-; 							ret i1 %continue_flag
- 							ret i1 true
+%continue_flag.addr =		getelementptr %story_handel_type, ptr %handel, i32 2
+%continue_flag =			load i1, ptr %continue_flag.addr
+
+							ret i1 %continue_flag
 }
 
 ; Returns the number of choices availabe from a given story handel
@@ -157,12 +172,6 @@ define void @ChooseChoiceIndex(ptr %handel, i32 %choice_index)
 ; 							ret void
  							ret void
 }
-
-declare %result_type @cont_fn_proto(ptr %frame_buff, i1 %flag)
-%result_type =					type { ptr, %yield_type }
-%yield_type =					type { i32, i1} 
-								; 0 choice_index: i32 
-								; 1 continue_flag: i1
 
 
 @ptr_size =						constant i32 8 ;TODO: Determine pointer size
@@ -229,10 +238,9 @@ end:
 
 story:
 							br label %loop_0
-
 loop_0:
 %index_0 =					phi i32 [0, %story], [%inc_0, %resume.loop_0], [%inc_0, %suspend_point.loop_0]
-%string_addr_0 =			getelementptr ptr, ptr @story.root.root.body, i32 %index_0
+%string_addr_0 =			getelementptr [3 x ptr], ptr @story.root.root.body, i32 0, i32 %index_0
 %string_0 =					load ptr, ptr %string_addr_0
 							call i32 @write_string(ptr @out_stream, ptr %string_0)
 
@@ -367,7 +375,7 @@ story:
 
 loop_0:
 %index_0 =					phi i32 [0, %story], [%inc_0, %resume.loop_0], [%inc_0, %suspend_point.loop_0]
-%string_addr_0 =			getelementptr ptr, ptr @story.B.root.body, i32 %index_0
+%string_addr_0 =			getelementptr [2 x ptr], ptr @story.B.root.body, i32 0, i32 %index_0
 %string_0 =					load ptr, ptr %string_addr_0
 							call i32 @write_string(ptr @out_stream, ptr %string_0)
 
@@ -384,10 +392,10 @@ B.cont_0:
 							br label %story.choice_point_0
 
 story.choice_point_0:
-%resume_abnormal_choice_point_0 =	call i1 (...) @llvm.coro.suspend.retcon.i1(%yield_type {i32 0, i1 false})
+%resume_abnormal_choice_point_0 =	call i1 (...) @llvm.coro.suspend.retcon.i1(%yield_type {i32 0, i1 true})
 							br i1 %resume_abnormal_choice_point_0, label %error, label %B.cont_0
 cont_0:
 
-%resume_abnormal_gather_0 =	call i1 (...) @llvm.coro.suspend.retcon.i1(%yield_type {i32 0, i1 true})
+%resume_abnormal_gather_0 =	call i1 (...) @llvm.coro.suspend.retcon.i1(%yield_type {i32 0, i1 false})
 							br label %destroy
 }
