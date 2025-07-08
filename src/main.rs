@@ -3,6 +3,7 @@ use std::env;
 use std::io::Read;
 
 use ink_llvm::ast::Story;
+use ink_llvm::codegen::emit;
 
 fn main() -> std::io::Result<()>{
    
@@ -14,6 +15,7 @@ fn main() -> std::io::Result<()>{
     if let Ok((remaining, ast)) = Story::parse(src.as_str()){
         println!("AST:\n{:#?}\n", ast);
         println!("Unparsed:\n{:?}\n", remaining);
+        println!("ASM:\n{}", emit(ast));
     }
 
 

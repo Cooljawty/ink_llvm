@@ -25,6 +25,9 @@ declare %result_type @cont_fn_proto(ptr %frame_buff, i1 %flag)
 								; 0 choice_index: i32 
 								; 1 continue_flag: i1
 
+@ptr_size =						constant i32 8 ;TODO: Determine pointer size
+@allignment =					constant i32 0 ;TODO: Determine data allignment
+
 ; Message strings
 @newline_str =					constant [2 x i8] c"\0A\00"
 @error_message =				constant [7 x i8] c"Error!\00"
@@ -173,41 +176,7 @@ define void @ChooseChoiceIndex(ptr %handel, i32 %choice_index)
  							ret void
 }
 
-
-@ptr_size =						constant i32 8 ;TODO: Determine pointer size
-@allignment =					constant i32 0 ;TODO: Determine data allignment
-
 ; Story
-
-;Content Strings
-@story.str_0 =					constant [ 7 x i8] c"Hello!\00"
-@story.str_1 =					constant [ 2 x i8] c"a\00"
-
-@story.choice_0.str_0 =			constant [ 7 x i8] c"Chose \00"
-@story.choice_0.str_choice =	constant [ 2 x i8] c"A\00"
-@story.choice_0.str_1 =			constant [11 x i8] c" the first\00"
-
-@story.choice_1.str_0 =			constant [ 4 x i8] c"Or \00"
-@story.choice_1.str_choice =	constant [ 2 x i8] c"B\00"
-@story.choice_1.str_1 =			constant [12 x i8] c" the second\00"
-
-@story.gather_0.str_0 =			constant [ 8 x i8] c"The end\00"
-
-;Story.<knot>.<stitch>.<label>.body
-@story.root.root.body =			constant [3 x ptr] [
-									ptr @story.str_0, 
-									ptr @story.str_1, 
-									ptr @story.gather_0.str_0
-								]
-
-@story.B.str_0 =				constant [13 x i8] c"Start tunnel\00"
-@story.B.str_2 =				constant [11 x i8] c"End tunnel\00"
-
-@story.B.root.body =			constant [2 x ptr] [
-									ptr @story.B.str_0,
-									ptr @story.B.str_2
-								]
-
 define %result_type @__root(ptr %frame_buffer, i1 %flag) presplitcoroutine noinline
 {
 entry:
@@ -399,3 +368,33 @@ cont_0:
 %resume_abnormal_gather_0 =	call i1 (...) @llvm.coro.suspend.retcon.i1(%yield_type {i32 0, i1 false})
 							br label %destroy
 }
+
+;Content Strings
+@story.str_0 =					constant [ 7 x i8] c"Hello!\00"
+@story.str_1 =					constant [ 2 x i8] c"a\00"
+
+@story.choice_0.str_0 =			constant [ 7 x i8] c"Chose \00"
+@story.choice_0.str_choice =	constant [ 2 x i8] c"A\00"
+@story.choice_0.str_1 =			constant [11 x i8] c" the first\00"
+
+@story.choice_1.str_0 =			constant [ 4 x i8] c"Or \00"
+@story.choice_1.str_choice =	constant [ 2 x i8] c"B\00"
+@story.choice_1.str_1 =			constant [12 x i8] c" the second\00"
+
+@story.gather_0.str_0 =			constant [ 8 x i8] c"The end\00"
+
+;Story.<knot>.<stitch>.<label>.body
+@story.root.root.body =			constant [3 x ptr] [
+									ptr @story.str_0, 
+									ptr @story.str_1, 
+									ptr @story.gather_0.str_0
+								]
+
+@story.B.str_0 =				constant [13 x i8] c"Start tunnel\00"
+@story.B.str_2 =				constant [11 x i8] c"End tunnel\00"
+
+@story.B.root.body =			constant [2 x ptr] [
+									ptr @story.B.str_0,
+									ptr @story.B.str_2
+								]
+
