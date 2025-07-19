@@ -41,7 +41,7 @@ pub struct Knot<I> {
 #[derive(Debug)]
 pub struct Stitch<I> {
     pub(crate) signature: Signature,
-    pub(crate) body: I
+    pub(crate) body: Weave<I>
 }
 
 #[allow(dead_code)]
@@ -52,6 +52,7 @@ pub struct Function<I> {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Weave<I> {
     label: Option<Identifier>,
 
@@ -61,6 +62,7 @@ pub struct Weave<I> {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Choice<I> {
     level: usize,
     label: Option<Identifier>,

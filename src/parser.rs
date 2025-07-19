@@ -29,7 +29,7 @@ use nom::{
     sequence::{delimited, preceded,},
 };
 
-use crate::{ast, ast::Subprogram, };
+use crate::{ast, ast::Subprogram, ast::Weave, };
 
 pub trait Parse<I> 
 where
@@ -42,7 +42,7 @@ where
 
 impl<I> ast::Story<I> 
 where
-	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+	for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>, 
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -138,7 +138,7 @@ where
 //Knots and Stitches
 impl<I> ast::Subprogram<I> for ast::Knot<I> 
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -220,7 +220,7 @@ where
 
 impl<I> ast::Subprogram<I> for ast::Stitch<I> 
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -257,15 +257,19 @@ where
         }))
     }
 
-    type Body = I;
+    type Body = Weave<I>;
 
-    fn parse_body(input: I) -> IResult<I, Self::Body> { ast::Story::text_body(input) }
+    fn parse_body(input: I) -> IResult<I, Self::Body> { 
+        let (rem, text) = ast::Story::text_body(input)?;
+
+        ast::Weave::parse(text)
+    }
 }
 
 //Functions
 impl<I> ast::Subprogram<I> for ast::Function<I> 
 where
-    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug,
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
@@ -307,6 +311,22 @@ where
     type Body = I;
     fn parse_body(input: I) -> IResult<I, Self::Body> { ast::Story::text_body(input) }
 
+}
+
+impl<I> ast::Weave<I>
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+
+    #[allow(dead_code)]
+    pub fn parse(input: I) -> IResult<I, Self>
+    {
+        print_nom_input!(input);
+
+        todo!()
+    }
 }
 
 fn collect_input<I, T>(input: I) -> T
