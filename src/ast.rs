@@ -41,7 +41,7 @@ pub struct Knot<I> {
 #[derive(Debug)]
 pub struct Stitch<I> {
     pub(crate) signature: Signature,
-    pub(crate) body: Weave<I>
+    pub(crate) body: Vec<Weave<I>>
 }
 
 #[allow(dead_code)]
@@ -54,11 +54,10 @@ pub struct Function<I> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Weave<I> {
-    label: Option<Identifier>,
-
-    content: Vec<Content<I>>,
-    choices: Vec<(Choice<I>, Option<Box<Weave<I>>>)>,
-    gather: Option<Box<Weave<I>>>, //Holds address of next Box<Weave> in chain
+    pub(crate) label: Option<Identifier>,
+      
+    pub(crate) content: Vec<Content<I>>,
+    pub(crate) choices: Vec<Choice<I>>,
 }
 
 #[allow(dead_code)]
@@ -71,7 +70,7 @@ pub struct Choice<I> {
 
     text: Content<I>,
     choice_text: Content<I>,
-    post_text: Content<I>,
+    post_text: Option<Weave<I>>,
 }
 
 #[allow(dead_code)]

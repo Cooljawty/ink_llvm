@@ -257,12 +257,14 @@ where
         }))
     }
 
-    type Body = Weave<I>;
+    type Body = Vec<Weave<I>>;
 
     fn parse_body(input: I) -> IResult<I, Self::Body> { 
         let (rem, text) = ast::Story::text_body(input)?;
 
-        ast::Weave::parse(text)
+        let (_, body) = all_consuming(many0(ast::Weave::parse)).parse(text)?;
+
+        Ok((rem, body))
     }
 }
 
@@ -323,9 +325,27 @@ where
     #[allow(dead_code)]
     pub fn parse(input: I) -> IResult<I, Self>
     {
+        eprintln!("Start Weave");
         print_nom_input!(input);
+        let (rem, weave) = map(
+            (
+                opt((separated_list1(space0, tag("-")), opt(delimited(tag("("), identifier, tag(")"))))), 
+                many0(ast::Content::parse), 
+                many0(ast::Choice::parse),
+            ),
+            |(gather, content, choices)| {
+                let label = match gather {
+                    Some((_, label)) => label,
+                    None => None,
+                };
+                ast::Weave{ label, content, choices }
+            }
+        ).parse(input)?;
 
-        todo!()
+        print_nom_input!(rem);
+        eprintln!("End Weave");
+
+        Ok((rem, weave))
     }
 }
 
@@ -383,6 +403,18 @@ where
     }).collect();
 
     Ok((rem, param_list))
+}
+
+impl<I> Parse<I> for ast::Choice<I> where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{ 
+    fn parse(input: I) -> IResult<I, Self>
+    {
+        print_nom_input!(input);
+        todo!("Impliment choice parser")
+    }
 }
 
 //Content
