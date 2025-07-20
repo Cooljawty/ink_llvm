@@ -327,6 +327,48 @@ where
     {
         eprintln!("Start Weave");
         print_nom_input!(input);
+
+        let (rem, label) = match opt((separated_list1(space0, tag("-")), opt(delimited(tag("("), identifier, tag(")"))))).parse(input)?
+        {
+            (rem, Some((_, label))) => (rem, label),
+            (rem, None) => (rem, None),
+        };
+
+        /*
+        use nom::combinator::rest;
+        let (rem, content) = many0(verify(
+            ast::Content::parse,
+            |line| if let ast::Content::Newline = line {
+                !( (space0, one_of("-*")).parse(rest).is_ok() )
+            } else { true } 
+        )).parse(rem)?;
+        */
+        let mut rem = rem;
+        let mut content = Vec::new();
+        let (rem, content) = loop{
+            rem = match ast::Content::parse(rem)
+            {
+                Ok((rem, line @ ast::Content::Newline)) => {
+                    content.push(line);
+                    if peek((space0::<I, nom::error::Error<I>>, one_of("-*"))).parse(rem.clone()).is_ok() {
+                        break (rem, content);
+                    }
+                    else { rem }
+                },
+                Ok((rem, line)) => {
+                    content.push(line);
+
+                    rem
+                },
+                Err(err) => match err {
+                    nom::Err::Error(err) | nom::Err::Failure(err) => break (err.input, content),
+                    _ => todo!("Figure out what to do for incomplete"),
+                },
+            }
+        };
+
+        let (rem, choices) = many0(ast::Choice::parse).parse(rem)?;
+        /*
         let (rem, weave) = map(
             (
                 opt((separated_list1(space0, tag("-")), opt(delimited(tag("("), identifier, tag(")"))))), 
@@ -341,11 +383,12 @@ where
                 ast::Weave{ label, content, choices }
             }
         ).parse(input)?;
+        */
 
         print_nom_input!(rem);
         eprintln!("End Weave");
 
-        Ok((rem, weave))
+        Ok((rem, ast::Weave{ label, content, choices }))
     }
 }
 
@@ -424,7 +467,6 @@ where
     <I as nom::Input>::Item: nom::AsChar,
     for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
 {
-
     #[allow(dead_code)]
     pub fn parse(input: I) -> IResult<I, Self>
     {
