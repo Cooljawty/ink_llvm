@@ -63,14 +63,15 @@ pub struct Weave<I> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Choice<I> {
-    level: usize,
-    label: Option<Identifier>,
+    pub(crate) level: usize,
+    pub(crate) label: Option<Identifier>,
 
-    condition: Option<Vec<Expression>>,
+    pub(crate) condition: Option<Vec<Expression>>,
 
-    text: Content<I>,
-    choice_text: Content<I>,
-    post_text: Option<Weave<I>>,
+    pub(crate) text: Vec<Content<I>>,
+    pub(crate) choice_text: Option<Vec<Content<I>>>,
+
+    pub(crate) branch: Option<Branch>,
 }
 
 #[allow(dead_code)]

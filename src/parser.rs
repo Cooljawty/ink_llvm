@@ -182,6 +182,11 @@ where
 
     fn parse_body(input: I) -> IResult<I, Self::Body> 
     {
+        #[cfg(debug_assertions)]
+        {
+            print_nom_input!(input);
+        }
+
         //Note: Knot body consumes input diffrently than the text_body parser.
         //      Knots contain nested stitches. 
         //      Thus it needs to search for a full "==" tag instead of any line starting with a '='.
@@ -260,9 +265,15 @@ where
     type Body = Vec<Weave<I>>;
 
     fn parse_body(input: I) -> IResult<I, Self::Body> { 
+        eprintln!("Start Stitch Body");
+
         let (rem, text) = ast::Story::text_body(input)?;
 
-        let (_, body) = all_consuming(many0(ast::Weave::parse)).parse(text)?;
+        let (_, body) = all_consuming(many0(complete(ast::Weave::parse))).parse(text)?;
+
+        eprintln!("End Stitch Body");
+        eprintln!("{:?}", body);
+
 
         Ok((rem, body))
     }
@@ -325,24 +336,16 @@ where
     #[allow(dead_code)]
     pub fn parse(input: I) -> IResult<I, Self>
     {
-        eprintln!("Start Weave");
-        print_nom_input!(input);
-
-        let (rem, label) = match opt((separated_list1(space0, tag("-")), opt(delimited(tag("("), identifier, tag(")"))))).parse(input)?
-        {
-            (rem, Some((_, label))) => (rem, label),
+        let (rem, label) = match opt((
+                separated_list1(space0, tag("-")),
+                opt(delimited( (space0, tag("(")), identifier, (tag(")"), space0))),
+        )).parse(input)? {
+            (rem, Some((_level, label))) => (rem, label),
             (rem, None) => (rem, None),
         };
 
-        /*
-        use nom::combinator::rest;
-        let (rem, content) = many0(verify(
-            ast::Content::parse,
-            |line| if let ast::Content::Newline = line {
-                !( (space0, one_of("-*")).parse(rest).is_ok() )
-            } else { true } 
-        )).parse(rem)?;
-        */
+        let (rem, _) = space0(rem)?;
+
         let mut rem = rem;
         let mut content = Vec::new();
         let (rem, content) = loop{
@@ -350,7 +353,7 @@ where
             {
                 Ok((rem, line @ ast::Content::Newline)) => {
                     content.push(line);
-                    if peek((space0::<I, nom::error::Error<I>>, one_of("-*"))).parse(rem.clone()).is_ok() {
+                    if peek((space0::<I, nom::error::Error<I>>, one_of("-*+"))).parse(rem.clone()).is_ok() {
                         break (rem, content);
                     }
                     else { rem }
@@ -367,28 +370,11 @@ where
             }
         };
 
-        let (rem, choices) = many0(ast::Choice::parse).parse(rem)?;
-        /*
-        let (rem, weave) = map(
-            (
-                opt((separated_list1(space0, tag("-")), opt(delimited(tag("("), identifier, tag(")"))))), 
-                many0(ast::Content::parse), 
-                many0(ast::Choice::parse),
-            ),
-            |(gather, content, choices)| {
-                let label = match gather {
-                    Some((_, label)) => label,
-                    None => None,
-                };
-                ast::Weave{ label, content, choices }
-            }
-        ).parse(input)?;
-        */
+        let (rem, choices) = many0(complete(ast::Choice::parse)).parse(rem)?;
 
-        print_nom_input!(rem);
-        eprintln!("End Weave");
+        let weave = ast::Weave{ label, content, choices };
 
-        Ok((rem, ast::Weave{ label, content, choices }))
+        Ok((rem, weave))
     }
 }
 
@@ -455,8 +441,70 @@ impl<I> Parse<I> for ast::Choice<I> where
 { 
     fn parse(input: I) -> IResult<I, Self>
     {
+        eprintln!("Start Choice");
         print_nom_input!(input);
-        todo!("Impliment choice parser")
+
+        let( rem, choice ) = map(
+            (
+            space0,
+            (
+            map(
+                alt(( 
+                separated_list1(space0, tag("*")), 
+                separated_list1(space0, tag("+")), 
+                )),
+                |level| level.len(),
+            ),
+            space0,
+            map(
+                opt(( delimited( tag("("), identifier, tag(")")), opt(line_ending))), 
+                |label| if let Some((label, _)) = label { Some(label) } else { None }
+            ),
+            space0,
+            opt( separated_list1( 
+                space0, delimited( tag("{"), ast::Expression::parse,  tag("}")) 
+            )),
+
+            //TOOD: Prevent parser from taking choice only text
+            many0(verify(
+                ast::Content::parse, 
+                |content| match content { ast::Content::Newline => false, _ => true }
+            )),
+
+            opt( delimited(
+                tag("["), 
+                many0(verify(
+                    ast::Content::parse, 
+                    |content| match content { ast::Content::Newline => false, _ => true }
+                )),
+                tag("]")
+            )),
+
+            opt(ast::Branch::parse ),
+
+            ),
+            multispace0
+            ),
+            |(_, (level, _, label, _, condition, text, choice_text, branch), _)| ast::Choice{ level, label, condition, text, choice_text, branch,},
+        ).parse(input)?;
+
+        //eprintln!("End Choice");
+        //print_nom_input!(rem);
+        //eprintln!("Choice:\n{:#?}", choice);
+        Ok((rem, choice))
+    }
+}
+
+impl<I> Parse<I> for ast::Branch
+where
+    for<'p> I: nom::Input + nom::Offset + nom::Compare<&'p str> + nom::FindSubstring<&'p str> + std::fmt::Debug + nom::ParseTo<f32>,
+    <I as nom::Input>::Item: nom::AsChar,
+    for<'p> &'p str: nom::FindToken<<I as nom::Input>::Item>,
+{
+    #[allow(dead_code)]
+    fn parse(input: I) -> IResult<I, Self> { 
+        //TODO: Branch parser
+        fail().parse(input)
     }
 }
 
